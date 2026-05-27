@@ -39,6 +39,8 @@ import {
   ResponsiveContainer,
   ScatterChart,
   Scatter,
+  LineChart,
+  Line,
 } from "recharts";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -527,6 +529,43 @@ export default function App() {
 
   const { statsArr, winner } = getPipelineStats();
 
+  const getTrendData = () => {
+    // Group runs by pipeline
+    const pipelineRuns: { [key: string]: RunRecord[] } = {
+      single: [],
+      two: [],
+      three: []
+    };
+
+    // Filter and sort runs
+    // Since `runs` is [newest, ..., oldest], let's reverse it to get chronological order for each pipeline
+    const sortedRuns = [...runs].reverse();
+    
+    sortedRuns.forEach(r => {
+      if (pipelineRuns[r.pipeline]) {
+        pipelineRuns[r.pipeline].push(r);
+      }
+    });
+
+    // Take last 10 for each
+    const result = [];
+    const maxLength = Math.max(...Object.values(pipelineRuns).map(r => r.length));
+    
+    for(let i = 0; i < maxLength; i++) {
+      const dataPoint: any = { name: `Run ${i + 1}` };
+      ['single', 'two', 'three'].forEach(p => {
+        if (pipelineRuns[p][i]) {
+          dataPoint[p] = pipelineRuns[p][i].score.total;
+        }
+      });
+      result.push(dataPoint);
+    }
+    
+    return result.slice(-10); // Last 10
+  };
+
+  const trendData = getTrendData();
+
   // Find selected record based on case ID and pipeline
   const currentRun = runs.find((r) => r.case_id === selectedCaseId && r.pipeline === activePipeline);
   const currentCase = testCases.find((tc) => tc.id === selectedCaseId);
@@ -858,6 +897,23 @@ export default function App() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                </div>
+
+                {/* Trend Chart: Score improvement over time */}
+                <div className="h-[250px] mt-6 pt-6 border-t border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-550 block mb-4 text-center">Score Improvement Trend (Last 10 Runs)</span>
+                  <ResponsiveContainer width="100%" height={200} minWidth={0}>
+                    <LineChart data={trendData} margin={{ top: 5, right: 30, left: -25, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Line type="monotone" dataKey="single" stroke="#94a3b8" strokeWidth={2} name="Single" />
+                      <Line type="monotone" dataKey="two" stroke="#38bdf8" strokeWidth={2} name="Two-Agent" />
+                      <Line type="monotone" dataKey="three" stroke="#4f46e5" strokeWidth={2} name="Three-Agent" />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
 
                 {/* Practical Decision Guidance bar */}
