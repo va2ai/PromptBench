@@ -130,10 +130,11 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
 
       if (isRateLimit && attempt <= maxRetries) {
         // Adaptively increase the current gap on rate-limiting to protect future queue requests
-        currentMinGapMs = Math.min(currentMinGapMs + 5000, 30000);
+        currentMinGapMs = Math.min(currentMinGapMs + 10000, 60000);
 
-        // Calculate retry delay with exponential backoff on fallback initial delay (gentler growth)
-        let delay = initialDelayMs * Math.pow(1.3, attempt - 1);
+        // Calculate retry delay with exponential backoff on fallback initial delay (steeper growth + jitter)
+        const jitter = Math.random() * 2000;
+        let delay = (initialDelayMs * Math.pow(1.5, attempt - 1)) + jitter;
         
         // Parse "retry in X.Y s" from error body if present
         const match = errString.match(/retry in\s+([\d\.]+)\s*s/i);
@@ -145,7 +146,7 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
         }
         
         // Cap max retry delay since Gemini quota windows reset every 60 seconds
-        delay = Math.min(delay, 40000);
+        delay = Math.min(delay, 50000);
         
         console.warn(`[Gemini API Rate Limit] Attempt ${attempt} failed with 429. Dynamic gap increased to ${(currentMinGapMs / 1000).toFixed(1)}s. Waiting ${(delay / 1000).toFixed(1)}s before retry...`);
         
@@ -484,7 +485,7 @@ app.post("/api/save-sources", (req, res) => {
 });
 
 // Pipeline Engine Core
-async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
+async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.1-flash", customPrompt?: string): Promise<{
   answer: string;
   citations_used: string[];
   prompt_tokens: number;
@@ -495,7 +496,7 @@ async function executeSingleAgent(question: string, sources: any[], modelName = 
     .map((s, idx) => `[Source ${idx + 1}] ID: ${s.source_id}\nTitle: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`)
     .join("\n\n");
 
-  const prompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
+  const prompt = customPrompt || `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
 Do not assume facts or bind unrelated references. Make sure to list exactly which citations were used.
 
 Source Corpus:
@@ -645,6 +646,44 @@ Response must be structured JSON.`;
     prompt_tokens: totalPromptTokens,
     output_tokens: totalOutputTokens,
   };
+}
+
+
+// Agent 3: Prompt Improver Agent (Meta-Agent)
+async function improvePrompt(
+  currentPrompt: string, 
+  feedback: string, 
+  modelName: string
+): Promise<string> {
+  const client = getGeminiClient();
+  const improvePromptPrompt = `You are a prompt engineering expert. 
+  Given the current prompt, and feedback from the validation/evaluation phase, please output an improved, more robust version of the prompt that avoids these mistakes.
+  
+  Current Prompt:
+  ${currentPrompt}
+  
+  Feedback / Errors:
+  ${feedback}
+  
+  Please output only the new, improved prompt in a JSON object.`;
+
+  const response = await generateContentWithRetry({
+    model: modelName,
+    contents: improvePromptPrompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          prompt: { type: Type.STRING },
+        },
+        required: ["prompt"],
+      },
+    },
+  });
+
+  const parsed = JSON.parse(response.text || "{}");
+  return parsed.prompt || currentPrompt;
 }
 
 // Three-Agent Core with Validation & Single-Turn Repair
@@ -913,30 +952,83 @@ Based on the quantitative metrics:
   return reportContent;
 }
 
-// RUN Single Benchmark route
-app.post("/api/run-single-pipeline", async (req, res) => {
-  const { caseId, pipeline, model } = req.body;
-  const modelName = model || "gemini-3.1-flash";
-  
-  if (!caseId || !pipeline) {
-    return res.status(400).json({ error: "caseId and pipeline are required." });
+app.get("/api/stream-single-pipeline", async (req, res) => {
+  const { caseId, pipeline, model } = req.query;
+  const modelName = (model as string) || "gemini-3.1-flash";
+
+  if (!caseId) {
+    return res.status(400).json({ error: "caseId is required." });
   }
 
   const cases = loadTestCases();
   const sources = loadSources();
-
   const activeCase = cases.find((c: any) => c.id === caseId);
+
   if (!activeCase) {
     return res.status(404).json({ error: "Test case not found" });
   }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const client = getGeminiClient();
+  const corpusText = sources.map((s: any, idx: number) => `[Source ${idx + 1}] ID: ${s.source_id}\nTitle: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`).join("\n\n");
+  const prompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
+Do not assume facts or bind unrelated references.
+Source Corpus:
+${corpusText}
+Question:
+${activeCase.question}`;
+
+  try {
+    const stream = await client.models.generateContentStream({
+      model: modelName,
+      contents: prompt,
+    });
+
+    for await (const chunk of stream) {
+      res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+    }
+  } catch (err: any) {
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+  } finally {
+    res.end();
+  }
+});
 
   const startTime = Date.now();
   try {
     let result: any = null;
 
     if (pipeline === "single") {
-      const run = await executeSingleAgent(activeCase.question, sources, modelName);
-      const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
+      let run = await executeSingleAgent(activeCase.question, sources, modelName);
+      let evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
+      
+      // Automatic improvement feedback loop
+      if (evalData.score.total < 100) {
+        const feedback = JSON.stringify(evalData.logs);
+        const currentPrompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
+Do not assume facts or bind unrelated references. Make sure to list exactly which citations were used.
+
+Source Corpus:
+${sources.map((s, idx) => `[Source ${idx + 1}] ID: ${s.source_id}\nTitle: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`).join("\n\n")}
+
+Question:
+${activeCase.question}
+
+Your response must be JSON matching the required schema. Ensure the answer is structured with headings or lists where appropriate.`;
+        
+        const newPrompt = await improvePrompt(currentPrompt, feedback, modelName);
+        const run2 = await executeSingleAgent(activeCase.question, sources, modelName, newPrompt);
+        const evalData2 = evaluateAnswer(run2.answer, run2.citations_used, activeCase, sources);
+        
+        if (evalData2.score.total > evalData.score.total) {
+          run = run2;
+          evalData = evalData2;
+        }
+      }
+
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
 

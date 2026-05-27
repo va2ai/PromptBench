@@ -264,7 +264,8 @@ export default function App() {
   const [sources, setSources] = useState<SourceDocument[]>([]);
   const [runs, setRuns] = useState<RunRecord[]>(preCalculatedRuns);
   const [loading, setLoading] = useState(false);
-  const [benchmarkLogs, setBenchmarkLogs] = useState<string[]>([]);
+  const [streamingAnswer, setStreamingAnswer] = useState("");
+  const [benchmarkLogs, setBenchmarkLogs]= useState<string[]>([]);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [markdownReport, setMarkdownReport] = useState<string>("");
 
@@ -361,6 +362,41 @@ export default function App() {
         `[${new Date().toLocaleTimeString()}] ❌ Error during execution: ${err.message}`,
         `[Advice] Grounding comparison is running in sandbox mode using pre-calculated benchmark parameters. Enter a GEMINI_API_KEY in Settings > Secrets to make live LLM agent runs.`,
       ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run streaming benchmark for a case
+  const runStreamingPipeline = async (caseId: string) => {
+    setLoading(true);
+    setStreamingAnswer("");
+    
+    try {
+      const resp = await fetch(`/api/stream-single-pipeline?caseId=${caseId}&model=${selectedModel}`);
+      const reader = resp.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // SSE often comes as 'data: {...}\n\n'
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) setStreamingAnswer((prev) => prev + data.text);
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
