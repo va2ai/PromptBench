@@ -47,10 +47,38 @@ function getGeminiClient(): GoogleGenAI {
 
 // Helper to manage rate-limiting under the Gemini 5 RPM Free Tier quota
 let lastRequestTime = 0;
-const MIN_GAP_MS = 12500; // 12.5 seconds minimum gap between requests to strictly respect the 5 RPM limit
+let currentMinGapMs = 15500; // Starting baseline: 15.5s minimum gap between requests
 
-// Helper to call generateContent with retry on rate limit / 429 quota limits
-async function generateContentWithRetry(params: any, maxRetries = 10, initialDelayMs = 15000): Promise<any> {
+interface QueueItem {
+  params: any;
+  maxRetries: number;
+  initialDelayMs: number;
+  resolve: (value: any) => void;
+  reject: (reason: any) => void;
+}
+
+const apiQueue: QueueItem[] = [];
+let isQueueRunning = false;
+
+async function runQueue() {
+  if (isQueueRunning) return;
+  isQueueRunning = true;
+  while (apiQueue.length > 0) {
+    const item = apiQueue.shift();
+    if (item) {
+      try {
+        const result = await executeWithThrottlingAndRetry(item.params, item.maxRetries, item.initialDelayMs);
+        item.resolve(result);
+      } catch (err) {
+        item.reject(err);
+      }
+    }
+  }
+  isQueueRunning = false;
+}
+
+// Inner helper to execute a single request, handling retries and throttling
+async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initialDelayMs = 25000): Promise<any> {
   const client = getGeminiClient();
   let attempt = 0;
   while (true) {
@@ -58,55 +86,72 @@ async function generateContentWithRetry(params: any, maxRetries = 10, initialDel
       // Direct rate-limiting throttling helper
       const now = Date.now();
       const elapsed = now - lastRequestTime;
-      if (elapsed < MIN_GAP_MS) {
-        const waitTime = MIN_GAP_MS - elapsed;
-        console.log(`[Gemini API Throttle] Pausing for ${(waitTime / 1000).toFixed(1)}s to protect Free Tier 5 RPM quota...`);
+      if (elapsed < currentMinGapMs) {
+        const waitTime = currentMinGapMs - elapsed;
+        console.log(`[Gemini API Throttle] Pausing for ${(waitTime / 1000).toFixed(1)}s to protect Free Tier 5 RPM quota (current gap: ${(currentMinGapMs / 1000).toFixed(1)}s)...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
 
       // Update the request timestamp before invocation
       lastRequestTime = Date.now();
-      return await client.models.generateContent(params);
+      const result = await client.models.generateContent(params);
+      
+      // On success, slowly cool down the gap towards the baseline (15.5s)
+      currentMinGapMs = Math.max(currentMinGapMs - 1000, 15500);
+      return result;
     } catch (err: any) {
       attempt++;
+      
+      const errString = (err?.message || err?.statusText || String(err) || "").toLowerCase();
       const isRateLimit = err?.status === 429 || 
                           err?.code === 429 || 
                           err?.statusCode === 429 ||
                           err?.status === "RESOURCE_EXHAUSTED" ||
-                          (err?.message && (
-                            err.message.includes("429") || 
-                            err.message.toLowerCase().includes("quota") || 
-                            err.message.toLowerCase().includes("rate limit") || 
-                            err.message.toLowerCase().includes("rate-limit") || 
-                            err.message.toLowerCase().includes("resource_exhausted") ||
-                            err.message.toLowerCase().includes("resource-exhausted") ||
-                            err.message.toLowerCase().includes("resource exhausted")
-                          ));
+                          errString.includes("429") || 
+                          errString.includes("quota") || 
+                          errString.includes("rate limit") || 
+                          errString.includes("rate-limit") || 
+                          errString.includes("resource_exhausted") || 
+                          errString.includes("resource-exhausted") || 
+                          errString.includes("resource exhausted") || 
+                          errString.includes("exhausted");
 
       if (isRateLimit && attempt <= maxRetries) {
-        // Double delay with backoff
+        // Adaptively increase the current gap on rate-limiting to protect future queue requests
+        currentMinGapMs = Math.min(currentMinGapMs + 5000, 30000);
+
+        // Calculate retry delay with exponential backoff on fallback initial delay
         let delay = initialDelayMs * Math.pow(1.5, attempt - 1);
         
         // Parse "retry in X.Y s" from error body if present
-        const msg = typeof err.message === "string" ? err.message : JSON.stringify(err);
-        const match = msg.match(/retry in\s+([\d\.]+)\s*s/i);
+        const match = errString.match(/retry in\s+([\d\.]+)\s*s/i);
         if (match && match[1]) {
           const parsedSecs = parseFloat(match[1]);
           if (!isNaN(parsedSecs)) {
-            delay = (parsedSecs + 3) * 1000; // Add extra buffer time to be safe
+            delay = (parsedSecs + 5) * 1000; // Add extra 5-second buffer (up from 3s) for network jitter and timing offsets
           }
         }
         
-        console.warn(`[Gemini API Rate Limit] Attempt ${attempt} failed with 429. Waiting ${(delay / 1000).toFixed(1)}s before retry...`);
+        console.warn(`[Gemini API Rate Limit] Attempt ${attempt} failed with 429. Dynamic gap increased to ${(currentMinGapMs / 1000).toFixed(1)}s. Waiting ${(delay / 1000).toFixed(1)}s before retry...`);
         
-        // Push lastRequestTime forward so next normal requests aren't immediately sent when this retry finishes
-        lastRequestTime = Date.now() + delay;
+        // Wait specified delay
         await new Promise((resolve) => setTimeout(resolve, delay));
+
+        // After waiting the retry delay, set lastRequestTime in the past so the next loop run is not double-throttled
+        lastRequestTime = Date.now() - currentMinGapMs;
       } else {
         throw err;
       }
     }
   }
+}
+
+// Helper to call generateContent with retry on rate limit / 429 quota limits (serialized globally)
+async function generateContentWithRetry(params: any, maxRetries = 12, initialDelayMs = 25000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    apiQueue.push({ params, maxRetries, initialDelayMs, resolve, reject });
+    runQueue();
+  });
 }
 
 // Default Data Initializers
