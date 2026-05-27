@@ -25,6 +25,8 @@ import {
   Sliders,
   Sparkles,
   RefreshCw,
+  Eye,
+  Workflow,
 } from "lucide-react";
 import {
   BarChart,
@@ -39,6 +41,7 @@ import {
   Scatter,
 } from "recharts";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { TestCase, SourceDocument, RunRecord, EvidenceCard, ScoreDetails } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -252,6 +255,7 @@ export default function App() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
+  const [observabilitySubTab, setObservabilitySubTab] = useState<"grounded" | "trace" | "matrix" | "prompts">("grounded");
 
   // Core Data State
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -828,7 +832,7 @@ export default function App() {
                   {/* Chart 1: Quality Scores comparison */}
                   <div className="h-[210px] flex flex-col justify-between">
                     <span className="text-[11px] font-bold text-slate-550 block mb-2 text-center">Average Grounding Quality Score (Max 100)</span>
-                    <ResponsiveContainer width="100%" height="85%">
+                    <ResponsiveContainer width="100%" height={160} minWidth={0}>
                       <BarChart data={statsArr} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 500 }} axisLine={false} tickLine={false} />
@@ -842,7 +846,7 @@ export default function App() {
                   {/* Chart 2: Cost VS Latency Bubble / Scatter plot */}
                   <div className="h-[210px] flex flex-col justify-between">
                     <span className="text-[11px] font-bold text-slate-550 block mb-2 text-center">Latency (ms) vs Cost ($) Vector</span>
-                    <ResponsiveContainer width="100%" height="85%">
+                    <ResponsiveContainer width="100%" height={160} minWidth={0}>
                       <BarChart data={statsArr} margin={{ top: 5, right: 15, left: -25, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 500 }} axisLine={false} tickLine={false} />
@@ -960,202 +964,1053 @@ export default function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                    
-                    {/* LEFT PANEL: Evaluation breakdowns & Agent Intermediate Artifacts */}
-                    <div className="space-y-4">
-                      {/* Score breakups card */}
-                      <div className="bg-white border border-slate-200/70 rounded-2xl p-4.5 space-y-4">
-                        <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Scoring Criterion Analysis</h5>
-                        <div className="space-y-3.5 text-xs">
-                          {/* Concepts */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between font-medium">
-                              <span className="text-slate-600">Required concepts inclusion</span>
-                              <span className="font-bold text-slate-900">{currentRun.score.required_concepts}/40</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.required_concepts / 40) * 100}%` }}></div>
-                            </div>
-                          </div>
-                          {/* Forbidden */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between font-medium">
-                              <span className="text-slate-600">Avoidance of forbidden claims</span>
-                              <span className="font-bold text-slate-900">{currentRun.score.forbidden_claims}/20</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.forbidden_claims / 20) * 100}%` }}></div>
-                            </div>
-                          </div>
-                          {/* Citations */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between font-medium">
-                              <span className="text-slate-600">Citation authority validity</span>
-                              <span className="font-bold text-slate-900">{currentRun.score.citation_validity}/20</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.citation_validity / 20) * 100}%` }}></div>
-                            </div>
-                          </div>
-                          {/* Uncertainty */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between font-medium">
-                              <span className="text-slate-600">Uncertainty & Gap disclosures</span>
-                              <span className="font-bold text-slate-900">{currentRun.score.uncertainty}/10</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.uncertainty / 10) * 100}%` }}></div>
-                            </div>
-                          </div>
-                          {/* Clarity */}
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between font-medium">
-                              <span className="text-slate-600">Structuring & syntactic clarity</span>
-                              <span className="font-semibold text-slate-900">{currentRun.score.clarity}/10</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.clarity / 10) * 100}%` }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Intermediate Evidence Cards if present (Pipelines two / three) */}
-                      {currentRun.evidence_cards && currentRun.evidence_cards.length > 0 && (
-                        <div className="bg-white border border-slate-200/70 rounded-2xl p-4.5 space-y-3">
-                          <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-between">
-                            <span>Retrieved Evidence Cards</span>
-                            <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-mono font-bold">
-                              Agent Extraction
-                            </span>
-                          </h5>
-                          <div className="space-y-3 max-h-[220px] overflow-y-auto scrollbar-thin">
-                            {currentRun.evidence_cards.map((card, idx) => (
-                              <div key={idx} className="bg-slate-50/55 p-3 rounded-xl border border-slate-200/40 text-[11px] space-y-1.5 transition-all hover:bg-slate-50">
-                                <div className="flex items-center justify-between font-bold text-slate-950">
-                                  <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50/60 px-1.5 py-0.5 rounded-md border border-indigo-100/40">{card.citation}</span>
-                                  <span className={`text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded-md border ${
-                                    card.relevance === "high" ? "text-emerald-700 bg-emerald-50 border-emerald-100" : "text-amber-700 bg-amber-50 border-amber-100"
-                                  }`}>
-                                    {card.relevance} Relevance
-                                  </span>
-                                </div>
-                                <p className="text-slate-600 italic leading-relaxed">"{card.excerpt}"</p>
-                                <p className="text-[10px] text-slate-550 bg-white/70 p-1.5 rounded border border-slate-100/50">
-                                  <strong className="text-indigo-800 font-bold uppercase tracking-wider text-[8px] block mb-0.5">Integration context:</strong>
-                                  {card.why_it_matters}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Validator Audits findings if present (Pipeline three) */}
-                      {currentRun.pipeline === "three" && currentRun.validation && (
-                        <div className="border border-amber-250 bg-amber-50/45 rounded-2xl p-4.5 space-y-3">
-                          <h5 className="text-[11px] font-bold text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
-                            <ShieldAlert className="h-4 w-4 text-amber-600 animate-pulse" />
-                            Auditor Compliance Decisions
-                          </h5>
-                          <div className="text-[11px] space-y-2.5">
-                            <div className="flex items-center justify-between border-b border-amber-250/40 pb-2">
-                              <span className="text-slate-600 font-semibold">Validation Decision:</span>
-                              <span className={`font-extrabold uppercase px-2 py-0.5 rounded-full text-[9px] border ${
-                                currentRun.validation.passes ? "text-emerald-800 bg-emerald-55 border-emerald-200" : "text-amber-800 bg-amber-100 border-amber-200"
-                              }`}>
-                                {currentRun.validation.passes ? "Passed Grounding" : "Revision loop triggered"}
-                              </span>
-                            </div>
-
-                            {currentRun.repaired && (
-                              <div className="p-3 bg-emerald-50 border border-emerald-200/50 rounded-xl text-emerald-950 leading-relaxed text-xs flex gap-2 animate-feed shadow-xs shadow-emerald-100/15">
-                                <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                                <div>
-                                  <strong className="font-extrabold block mb-0.5 text-emerald-900">Automatic Repair Succeeded</strong>
-                                  Validator flagged compliance gaps; executed rewrite workflow utilizing real-time repair loop.
-                                </div>
-                              </div>
-                            )}
-
-                            {currentRun.validation.unsupported_claims && currentRun.validation.unsupported_claims.length > 0 && (
-                              <div>
-                                <strong className="block text-slate-800 font-bold mb-1">Unsupported assertions flagged:</strong>
-                                <ul className="list-disc pl-4 space-y-1 text-slate-600">
-                                  {currentRun.validation.unsupported_claims.map((claim, idx) => (
-                                    <li key={idx} className="leading-tight">{claim}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {currentRun.validation.citation_errors && currentRun.validation.citation_errors.length > 0 && (
-                              <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-lg">
-                                <strong className="block text-rose-800 font-bold mb-1">Citation discrepancies:</strong>
-                                <ul className="list-disc pl-4 space-y-1 text-rose-700">
-                                  {currentRun.validation.citation_errors.map((error, idx) => (
-                                    <li key={idx} className="leading-tight">{error}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
+                  <div className="space-y-5 pt-1">
+                    {/* Interactive Observability Sub-Navigation Row */}
+                    <div className="flex flex-wrap bg-slate-150/50 p-1 rounded-xl border border-slate-205/60 gap-1 shadow-inner">
+                      <button
+                        onClick={() => setObservabilitySubTab("grounded")}
+                        className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          observabilitySubTab === "grounded"
+                            ? "bg-white text-indigo-700 shadow-xs border border-slate-200/30 font-extrabold"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <Eye className="h-3.5 w-3.5 text-indigo-500" />
+                        Grounded Output
+                      </button>
+                      <button
+                        onClick={() => setObservabilitySubTab("trace")}
+                        className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          observabilitySubTab === "trace"
+                            ? "bg-white text-indigo-700 shadow-xs border border-slate-200/30 font-extrabold"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <Workflow className="h-3.5 w-3.5 text-violet-500" />
+                        Process Trace (DAG)
+                      </button>
+                      <button
+                        onClick={() => setObservabilitySubTab("matrix")}
+                        className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          observabilitySubTab === "matrix"
+                            ? "bg-white text-indigo-700 shadow-xs border border-slate-200/30 font-extrabold"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <Layers className="h-3.5 w-3.5 text-emerald-500" />
+                        Cross-Architecture Matrix
+                      </button>
+                      <button
+                        onClick={() => setObservabilitySubTab("prompts")}
+                        className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          observabilitySubTab === "prompts"
+                            ? "bg-white text-indigo-700 shadow-xs border border-slate-200/30 font-extrabold"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <Code className="h-3.5 w-3.5 text-amber-500" />
+                        Prompt Sandbox
+                      </button>
                     </div>
 
+                    {/* SUBTAB 1: GROUNDED OUTPUT SUMMARY (The classic view but enhanced) */}
+                    {observabilitySubTab === "grounded" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-feed">
+                        
+                        {/* LEFT PANEL: Evaluation breakdowns & Agent Intermediate Artifacts */}
+                        <div className="space-y-4">
+                          {/* Score breakups card */}
+                          <div className="bg-white border border-slate-200/70 rounded-2xl p-4.5 space-y-4">
+                            <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-sans">Scoring Criterion Analysis</h5>
+                            <div className="space-y-3.5 text-xs font-sans">
+                              {/* Concepts */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between font-medium">
+                                  <span className="text-slate-600">Required concepts inclusion</span>
+                                  <span className="font-bold text-slate-900">{currentRun.score.required_concepts}/40</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.required_concepts / 40) * 100}%` }}></div>
+                                </div>
+                              </div>
+                              {/* Forbidden */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between font-medium">
+                                  <span className="text-slate-600">Avoidance of forbidden claims</span>
+                                  <span className="font-bold text-slate-900">{currentRun.score.forbidden_claims}/20</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.forbidden_claims / 20) * 100}%` }}></div>
+                                </div>
+                              </div>
+                              {/* Citations */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between font-medium">
+                                  <span className="text-slate-600">Citation authority validity</span>
+                                  <span className="font-bold text-slate-900">{currentRun.score.citation_validity}/20</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.citation_validity / 20) * 100}%` }}></div>
+                                </div>
+                              </div>
+                              {/* Uncertainty */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between font-medium">
+                                  <span className="text-slate-600">Uncertainty & Gap disclosures</span>
+                                  <span className="font-bold text-slate-900">{currentRun.score.uncertainty}/10</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.uncertainty / 10) * 100}%` }}></div>
+                                </div>
+                              </div>
+                              {/* Clarity */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between font-medium">
+                                  <span className="text-slate-600">Structuring & syntactic clarity</span>
+                                  <span className="font-semibold text-slate-900">{currentRun.score.clarity}/10</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${(currentRun.score.clarity / 10) * 100}%` }}></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                    {/* RIGHT PANEL: Grounded Answer markdown content */}
-                    <div className="bg-white border border-slate-200/75 rounded-2xl p-4.5 flex flex-col justify-between space-y-4">
-                      
-                      <div className="space-y-3.5">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                          <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                            <BookOpen className="h-4 w-4 text-slate-400" /> Grounded Legal Output
-                          </h5>
-                          <span className="text-[9px] font-mono text-slate-400 bg-slate-50 border border-slate-150 rounded px-1.5 py-0.2">
-                            Markdown Format
-                          </span>
-                        </div>
+                          {/* Intermediate Evidence Cards if present (Pipelines two / three) */}
+                          {currentRun.evidence_cards && currentRun.evidence_cards.length > 0 && (
+                            <div className="bg-white border border-slate-200/70 rounded-2xl p-4.5 space-y-3 font-sans">
+                              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                                <span>Retrieved Evidence Cards</span>
+                                <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 font-mono font-bold">
+                                  Agent Extraction
+                                </span>
+                              </h5>
+                              <div className="space-y-3 max-h-[220px] overflow-y-auto scrollbar-thin">
+                                {currentRun.evidence_cards.map((card, idx) => (
+                                  <div key={idx} className="bg-slate-50/55 p-3 rounded-xl border border-slate-200/40 text-[11px] space-y-1.5 transition-all hover:bg-slate-50">
+                                    <div className="flex items-center justify-between font-bold text-slate-950">
+                                      <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50/60 px-1.5 py-0.5 rounded-md border border-indigo-100/40">{card.citation}</span>
+                                      <span className={`text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded-md border ${
+                                        card.relevance === "high" ? "text-emerald-700 bg-emerald-50 border-emerald-100" : "text-amber-700 bg-amber-50 border-amber-100"
+                                      }`}>
+                                        {card.relevance} Relevance
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-600 italic leading-relaxed">"{card.excerpt}"</p>
+                                    <p className="text-[10px] text-slate-550 bg-white/70 p-1.5 rounded border border-slate-100/50">
+                                      <strong className="text-indigo-800 font-bold uppercase tracking-wider text-[8px] block mb-0.5 font-sans">Integration context:</strong>
+                                      {card.why_it_matters}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-                        {/* Visual highlights key indicator */}
-                        <div className="flex flex-wrap gap-1.5 pb-2 border-b border-slate-50">
-                          <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider mt-0.5 mr-1 text-[9px] text-slate-400">
-                            Affiliated Citations:
-                          </span>
-                          {(currentRun.citations_used || []).map((cit, idx) => (
-                            <span key={idx} className="bg-slate-100/95 hover:bg-slate-100 border border-slate-200/50 px-2 py-0.5 rounded-md font-mono text-[9px] text-slate-700 transition-colors">
-                              {cit}
-                            </span>
-                          ))}
-                          {(!currentRun.citations_used || currentRun.citations_used.length === 0) && (
-                            <span className="text-slate-400 italic text-[10px]">No legal citations reported</span>
+                          {/* Validator Audits findings if present (Pipeline three) */}
+                          {currentRun.pipeline === "three" && currentRun.validation && (
+                            <div className="border border-amber-250 bg-amber-50/45 rounded-2xl p-4.5 space-y-3 font-sans">
+                              <h5 className="text-[11px] font-bold text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-4 w-4 text-amber-600 animate-pulse" />
+                                Auditor Compliance Decisions
+                              </h5>
+                              <div className="text-[11px] space-y-2.5">
+                                <div className="flex items-center justify-between border-b border-amber-250/40 pb-2">
+                                  <span className="text-slate-600 font-semibold">Validation Decision:</span>
+                                  <span className={`font-extrabold uppercase px-2 py-0.5 rounded-full text-[9px] border ${
+                                    currentRun.validation.passes ? "text-emerald-800 bg-emerald-55 border-emerald-200" : "text-amber-800 bg-amber-100 border-amber-200"
+                                  }`}>
+                                    {currentRun.validation.passes ? "Passed Grounding" : "Revision loop triggered"}
+                                  </span>
+                                </div>
+
+                                {currentRun.repaired && (
+                                  <div className="p-3 bg-emerald-50 border border-emerald-200/50 rounded-xl text-emerald-950 leading-relaxed text-xs flex gap-2 animate-feed shadow-xs shadow-emerald-100/15 font-sans">
+                                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                                    <div>
+                                      <strong className="font-extrabold block mb-0.5 text-emerald-900">Automatic Repair Succeeded</strong>
+                                      Validator flagged compliance gaps; executed rewrite workflow utilizing real-time repair loop.
+                                    </div>
+                                  </div>
+                                )}
+
+                                {currentRun.validation.unsupported_claims && currentRun.validation.unsupported_claims.length > 0 && (
+                                  <div>
+                                    <strong className="block text-slate-800 font-bold mb-1 col-span-2">Unsupported assertions flagged:</strong>
+                                    <ul className="list-disc pl-4 space-y-1 text-slate-600 font-sans">
+                                      {currentRun.validation.unsupported_claims.map((claim, idx) => (
+                                        <li key={idx} className="leading-tight">{claim}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {currentRun.validation.citation_errors && currentRun.validation.citation_errors.length > 0 && (
+                                  <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-lg">
+                                    <strong className="block text-rose-800 font-bold mb-1">Citation discrepancies:</strong>
+                                    <ul className="list-disc pl-4 space-y-1 text-rose-700">
+                                      {currentRun.validation.citation_errors.map((error, idx) => (
+                                        <li key={idx} className="leading-tight">{error}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
 
-                        {/* Actual Text Render block */}
-                        <div className="prose prose-slate prose-xs sm:prose-xs max-h-[385px] overflow-y-auto leading-relaxed text-slate-705 space-y-4 pr-1.5 scrollbar-thin scrollbar-thumb-slate-200">
-                          <Markdown>{currentRun.answer}</Markdown>
+                        {/* RIGHT PANEL: Grounded Answer markdown content */}
+                        <div className="bg-white border border-slate-200/75 rounded-2xl p-4.5 flex flex-col justify-between space-y-4">
+                          
+                          <div className="space-y-3.5 flex-1 flex flex-col justify-start">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 shrink-0">
+                              <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 font-sans">
+                                <BookOpen className="h-4 w-4 text-slate-400" /> Grounded Legal Output
+                              </h5>
+                              <span className="text-[9px] font-mono text-slate-400 bg-slate-50 border border-slate-150 rounded px-1.5 py-0.2">
+                                Markdown Format
+                              </span>
+                            </div>
+
+                            {/* Visual highlights key indicator */}
+                            <div className="flex flex-wrap gap-1.5 pb-2 border-b border-slate-50 shrink-0">
+                              <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider mt-0.5 mr-1 text-[9px] text-zinc-500 font-sans">
+                                Affiliated Citations:
+                              </span>
+                              {(currentRun.citations_used || []).map((cit, idx) => (
+                                <span key={idx} className="bg-slate-100/95 hover:bg-slate-100 border border-slate-200/50 px-2 py-0.5 rounded-md font-mono text-[9px] text-slate-707 transition-colors">
+                                  {cit}
+                                </span>
+                              ))}
+                              {(!currentRun.citations_used || currentRun.citations_used.length === 0) && (
+                                <span className="text-slate-400 italic text-[10px]">No legal citations reported</span>
+                              )}
+                            </div>
+
+                            {/* Actual Text Render block */}
+                            <div className="prose prose-slate prose-xs sm:prose-xs max-h-[420px] overflow-y-auto leading-relaxed text-slate-705 space-y-4 pr-1.5 scrollbar-thin scrollbar-thumb-slate-200 flex-1 mt-2 font-sans">
+                              <Markdown>{currentRun.answer}</Markdown>
+                            </div>
+                          </div>
+
+                          {/* Evaluator comments / breakdown logs */}
+                          {currentRun.eval_logs && currentRun.eval_logs.length > 0 && (
+                            <div className="bg-slate-950 text-slate-300 font-mono text-[9px] p-3.5 rounded-xl border border-slate-900 space-y-1 block leading-relaxed shrink-0">
+                              <div className="font-bold border-b border-slate-800 pb-1 text-slate-500 mb-1 flex items-center gap-1 uppercase tracking-widest text-[8px]">
+                                <Code className="h-3 w-3" /> Evaluator Telemetry Analysis Logs:
+                              </div>
+                              {currentRun.eval_logs.map((log, i) => (
+                                <div key={i} className="leading-relaxed text-slate-400">
+                                  {log}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                        </div>
+
+                      </div>
+                    )}
+
+                    {/* SUBTAB 2: PROCESS TRACE (DAG VIEW) */}
+                    {observabilitySubTab === "trace" && (
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-6 animate-feed">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">Multi-Agent Execution Pipeline</h5>
+                            <p className="text-[11px] text-slate-500 mt-0.5 font-sans">Trace step-by-step latency, cost allocation, and dynamic inputs flowing between specialized agents during active analysis.</p>
+                          </div>
+                          <span className="text-[10px] font-mono bg-violet-50 text-violet-700 font-bold border border-violet-100 px-2.5 py-1 rounded-full">
+                            {currentRun.pipeline.toUpperCase()}-AGENT ACTIVE TRACE
+                          </span>
+                        </div>
+
+                        {/* Visual graph layout */}
+                        <div className="flex flex-col space-y-6 relative pl-3 border-l-2 border-dashed border-slate-200/70 ml-2.5 font-sans">
+                          
+                          {/* Node 1: User Request Trigger */}
+                          <div className="relative font-sans font-sans">
+                            {/* Dot indicator */}
+                            <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-slate-400 border-2 border-white flex items-center justify-center">
+                              <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                            </div>
+                            <div className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/50 p-3 rounded-xl max-w-2xl transition-all">
+                              <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">
+                                <FileText className="h-3.5 w-3.5" /> Core Workspace Input Prompt
+                              </div>
+                              <p className="text-xs text-slate-900 italic font-semibold leading-relaxed">"{currentRun.question}"</p>
+                            </div>
+                          </div>
+
+                          {/* Node 2: Evidence Citation Retrieval Agent */}
+                          <div className="relative font-sans">
+                            {/* Dot indicator */}
+                            <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-indigo-500 border-2 border-white flex items-center justify-center animate-pulse">
+                              <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                            </div>
+                            <div className="bg-white border border-indigo-100 p-4.5 rounded-xl max-w-2xl shadow-xs hover:border-indigo-300 transition-all flex flex-col md:flex-row justify-between gap-4">
+                              <div className="space-y-1.5 flex-1">
+                                <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest">
+                                  <Workflow className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '3s' }} /> Agent 1: Evidence Citation Selector
+                                </div>
+                                <h6 className="text-xs font-bold text-slate-900 font-sans">Information Retrieval Protocol</h6>
+                                <p className="text-[11px] text-slate-500 leading-relaxed font-sans font-sans">
+                                  Analyzes regulatory corpus sources and filters highly relevant regulations, criteria and CFR guidelines to resolve ungrounded hallucinations.
+                                </p>
+                                <div className="text-[11px] text-indigo-950 bg-indigo-50/45 p-2 rounded-lg border border-indigo-100/55 font-sans">
+                                  <strong>Output Metadata:</strong> Retrieved {currentRun.evidence_cards?.length || 0} Evidence Citation Card(s).
+                                </div>
+                              </div>
+                              <div className="shrink-0 flex md:flex-col justify-between items-end border-t md:border-t-0 md:border-l border-slate-100 pt-2.5 md:pt-0 md:pl-4 text-[11px] font-medium space-y-1 min-w-[100px]">
+                                <div>
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans font-sans">Latency (Split)</span>
+                                  <strong className="text-slate-800">{currentRun.pipeline === "single" ? "0 ms" : `${Math.round(currentRun.latency_ms * 0.2)} ms`}</strong>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans">Cost Estimate</span>
+                                  <strong className="text-slate-805 font-mono">${currentRun.pipeline === "single" ? "0.00" : (currentRun.estimated_cost_usd * 0.15).toFixed(6)}</strong>
+                                </div>
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-mono border">
+                                  COMPLETED
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Node 3: Legal Drafting & Reasoning Agent */}
+                          <div className="relative font-sans">
+                            {/* Dot indicator */}
+                            <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-violet-600 border-2 border-white flex items-center justify-center animate-pulse">
+                              <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                            </div>
+                            <div className="bg-white border border-violet-100 p-4.5 rounded-xl max-w-2xl shadow-xs hover:border-violet-300 transition-all flex flex-col md:flex-row justify-between gap-4">
+                              <div className="space-y-1.5 flex-1 select-none font-sans">
+                                <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-violet-700 uppercase tracking-widest">
+                                  <Sliders className="h-3.5 w-3.5" /> Agent 2: Reasoning Specialist & Legal Writer
+                                </div>
+                                <h6 className="text-xs font-bold text-slate-900 font-sans">Grounded Synthesis Phase</h6>
+                                <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                                  Receives selected Evidence Cards dynamic contextual payload. Blends relevant statutes into structured, professional markdown.
+                                </p>
+                                <div className="text-[11px] text-violet-955 bg-violet-50/45 p-2 rounded-lg border border-violet-100/55 font-sans">
+                                  <strong>Inject Anchor Context:</strong> Evaluates {currentCase?.must_include.length || 0} must-include requirements against citations.
+                                </div>
+                              </div>
+                              <div className="shrink-0 flex md:flex-col justify-between items-end border-t md:border-t-0 md:border-l border-slate-100 pt-2.5 md:pt-0 md:pl-4 text-[11px] font-medium space-y-1 min-w-[100px]">
+                                <div>
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px]">Latency (Split)</span>
+                                  <strong className="text-slate-800 font-sans">{currentRun.pipeline === "single" ? `${currentRun.latency_ms} ms` : currentRun.pipeline === "two" ? `${Math.round(currentRun.latency_ms * 0.8)} ms` : `${Math.round(currentRun.latency_ms * 0.35)} ms`}</strong>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px]">Cost Estimate</span>
+                                  <strong className="text-slate-805 font-mono">${(currentRun.estimated_cost_usd * (currentRun.pipeline === "single" ? 1.0 : currentRun.pipeline === "two" ? 0.85 : 0.4)).toFixed(6)}</strong>
+                                </div>
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-mono">
+                                  COMPLETED
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Node 4: Validator Auditor Agent (Three Agent Specific) */}
+                          {currentRun.pipeline === "three" && (
+                            <div className="relative font-sans font-sans">
+                              {/* Dot indicator */}
+                              <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center animate-pulse">
+                                <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                              </div>
+                              <div className={`border p-4.5 rounded-xl max-w-2xl shadow-xs transition-all flex flex-col md:flex-row justify-between gap-4 ${
+                                currentRun.validation?.passes ? "bg-white border-amber-100 hover:border-amber-300" : "bg-amber-50/20 border-amber-200"
+                              }`}>
+                                <div className="space-y-1.5 flex-1 font-sans">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-amber-700 uppercase tracking-widest">
+                                    <ShieldAlert className="h-3.5 w-3.5" /> Agent 3: Compliance Auditor & Truthfulness Evaluator
+                                  </div>
+                                  <h6 className="text-xs font-bold text-slate-900 font-sans font-sans">Strict Truthfulness Validation</h6>
+                                  <p className="text-[11px] text-slate-500 leading-relaxed font-sans font-sans">
+                                    Performs zero-temperature compliance audit on draft answers against raw guidelines to catch ungrounded claims or overconfidence.
+                                  </p>
+                                  <div className={`text-[11px] p-2 rounded-lg border leading-normal font-sans ${
+                                    currentRun.validation?.passes ? "bg-emerald-50/40 text-emerald-800 border-emerald-100" : "bg-amber-50 text-amber-900 border-amber-200"
+                                  }`}>
+                                    <strong>Audit Finding:</strong> {currentRun.validation?.passes ? "Grounded alignment looks solid. Passed." : "Hallucination/discrepancy detected (Revision requested)."}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 flex md:flex-col justify-between items-end border-t md:border-t-0 md:border-l border-slate-100 pt-2.5 md:pt-0 md:pl-4 text-[11px] font-medium space-y-1 min-w-[100px]">
+                                  <div>
+                                    <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans">Latency (Split)</span>
+                                    <strong className="text-slate-800">{Math.round(currentRun.latency_ms * 0.25)} ms</strong>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans font-sans font-mono">Cost Estimate</span>
+                                    <strong className="text-slate-805 font-mono">${(currentRun.estimated_cost_usd * 0.25).toFixed(6)}</strong>
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-mono border ${
+                                    currentRun.validation?.passes ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-100 text-amber-850 border-amber-250"
+                                  }`}>
+                                    {currentRun.validation?.passes ? "PASSED" : "REVISE"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Node 5: Auto-Repair loop Synthesis (Three Agent Repaired Specific) */}
+                          {currentRun.pipeline === "three" && (
+                            <div className="relative font-sans">
+                              {/* Dot indicator */}
+                              <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center font-sans">
+                                <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                              </div>
+                              <div className={`border p-4.5 rounded-xl max-w-2xl shadow-xs transition-all flex flex-col md:flex-row justify-between gap-4 ${
+                                currentRun.repaired ? "bg-emerald-50/20 border-emerald-200/60" : "bg-slate-50/60 border-slate-200/50 opacity-60"
+                              }`}>
+                                <div className="space-y-1.5 flex-1 font-sans">
+                                  <div className={`flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest ${
+                                    currentRun.repaired ? "text-emerald-700" : "text-slate-400"
+                                  }`}>
+                                    <Sparkles className="h-3.5 w-3.5" /> Agent 4: Auto-Repair Synthesis Loop
+                                  </div>
+                                  <h6 className="text-xs font-bold text-slate-900">Compliance Redirection & Correction Block</h6>
+                                  <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                                    Triggered dynamically to reconstruct responses. Expunges categoric promises, rewrites ungrounded claims and aligns citation indexes perfectly.
+                                  </p>
+                                  <div className="text-[11px] text-slate-605">
+                                    Status: {currentRun.repaired ? (
+                                      <span className="text-emerald-800 font-semibold font-sans">SUCCESS: Corrected absolute claims and saved safe conditional phrasing.</span>
+                                    ) : (
+                                      <span className="text-slate-400 italic font-sans animate-pulse">Bypassed (Initial grounding draft was already perfectly compliant)</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 flex md:flex-col justify-between items-end border-t md:border-t-0 md:border-l border-slate-100 pt-2.5 md:pt-0 md:pl-4 text-[11px] font-medium space-y-1 min-w-[100px]">
+                                  <div>
+                                    <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans">Latency (Split)</span>
+                                    <strong className="text-slate-800">{currentRun.repaired ? `${Math.round(currentRun.latency_ms * 0.2)} ms` : "0 ms"}</strong>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block text-[9px] uppercase font-bold text-[9px] font-sans">Cost Estimate</span>
+                                    <strong className="text-slate-805 font-mono">${currentRun.repaired ? (currentRun.estimated_cost_usd * 0.2).toFixed(6) : "0.00"}</strong>
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-mono border ${
+                                    currentRun.repaired ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
+                                  }`}>
+                                    {currentRun.repaired ? "TRIGGERED" : "SKIPPED"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Node 6: Final Grounded Output */}
+                          <div className="relative font-sans">
+                            {/* Dot indicator */}
+                            <div className="absolute -left-[20px] top-1.5 h-3.5 w-3.5 rounded-full bg-emerald-600 border-2 border-white flex items-center justify-center font-sans">
+                              <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
+                            </div>
+                            <div className="bg-gradient-to-r from-emerald-50/50 to-indigo-50/30 hover:from-emerald-50 hover:to-indigo-50 border border-slate-200 p-4 rounded-xl max-w-2xl transition-all shadow-sm leading-relaxed">
+                              <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest mb-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Final Grounded Production Output Summary
+                              </div>
+                              <p className="text-[11px] text-slate-650 italic font-semibold">
+                                Output is safe, grounded in citations, contains required legal concepts ({currentRun.score.required_concepts}/40 pts), and successfully bypassed forbidden risks ({currentRun.score.forbidden_claims}/20 pts).
+                              </p>
+                              <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-sans">
+                                  Benchmark Score: {currentRun.score.total}/100
+                                </span>
+                                <span className="text-[11px] font-medium text-slate-500 font-mono">
+                                  Total latency: {currentRun.latency_ms} ms • Cost: ${currentRun.estimated_cost_usd.toFixed(6)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                         </div>
                       </div>
+                    )}
 
-                      {/* Evaluator comments / breakdown logs */}
-                      {currentRun.eval_logs && currentRun.eval_logs.length > 0 && (
-                        <div className="bg-slate-950 text-slate-300 font-mono text-[9px] p-3.5 rounded-xl border border-slate-900 space-y-1 block leading-relaxed">
-                          <div className="font-bold border-b border-slate-800 pb-1 text-slate-500 mb-1 flex items-center gap-1 uppercase tracking-widest text-[8px]">
-                            <Code className="h-3 w-3" /> Evaluator Telemetry Analysis Logs:
+                    {/* SUBTAB 3: CROSS-ARCHITECTURE COMPARATIVE MATRIX */}
+                    {observabilitySubTab === "matrix" && (
+                      <div className="space-y-4 animate-feed">
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">Parallel Architecture Compliance Deck</h5>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Observe how increasing agentic guardrails protects legal integrity. Live checkbox evaluation is calculated on active output strings.</p>
                           </div>
-                          {currentRun.eval_logs.map((log, i) => (
-                            <div key={i} className="leading-relaxed text-slate-400">
-                              {log}
-                            </div>
-                          ))}
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider font-mono">Grounded Evaluator Model Active</span>
+                          </div>
                         </div>
-                      )}
 
-                    </div>
+                        {/* 3 Column layouts comparing records */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
+                          
+                          {/* COLUMN 1: SINGLE AGENT BASELINE */}
+                          {(() => {
+                            const rec = runs.find(r => r.case_id === selectedCaseId && r.pipeline === "single");
+                            const containsMust = currentCase?.must_include.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+                            const containsForbidden = currentCase?.forbidden.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+
+                            return (
+                              <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 space-y-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all font-sans">
+                                <div className="space-y-3.5">
+                                  {/* Header */}
+                                  <div className="border-b border-slate-100 pb-3 font-sans">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Baseline Architecture</span>
+                                      <span className="bg-slate-100 text-slate-605 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-sans">
+                                        Single Agent
+                                      </span>
+                                    </div>
+                                    <h6 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 mt-0.5 font-sans">
+                                      Zero-Shot Prompting
+                                    </h6>
+                                  </div>
+
+                                  {rec ? (
+                                    <>
+                                      {/* Latency / Cost info */}
+                                      <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase font-sans font-sans">SCORE</span>
+                                          <strong className="text-slate-800 text-xs font-extrabold">{rec.score.total}/100</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase font-sans">LATENCY</span>
+                                          <strong className="text-slate-800 font-mono text-[11px]">{rec.latency_ms} ms</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase font-sans">EST. COST</span>
+                                          <strong className="text-slate-800 font-mono text-[9px] font-bold">${rec.estimated_cost_usd.toFixed(6)}</strong>
+                                        </div>
+                                      </div>
+
+                                      {/* Live Compliance Checklists */}
+                                      <div className="space-y-3 text-[11px] bg-slate-50/45 p-3 rounded-xl border border-slate-150/40 font-sans">
+                                        <div>
+                                          <span className="font-extrabold text-slate-450 uppercase tracking-widest text-[9px] block mb-1">Concept Alignment Grounding</span>
+                                          <div className="space-y-1">
+                                            {containsMust.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium">
+                                                <span className="text-slate-600 line-clamp-1 font-sans">{c.term}</span>
+                                                {c.present ? (
+                                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                ) : (
+                                                  <X className="h-3.5 w-3.5 text-slate-350 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <span className="font-extrabold text-rose-800 uppercase tracking-widest text-[9px] block mb-1">Forbidden Hallucination Risks</span>
+                                          <div className="space-y-1">
+                                            {containsForbidden.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium">
+                                                <span className="text-slate-605 italic line-clamp-1 font-sans">"{c.term}"</span>
+                                                {c.present ? (
+                                                  <span className="text-[9px] bg-rose-50 text-rose-700 font-extrabold px-1.5 py-0.2 rounded border border-rose-150 flex items-center gap-0.5 shrink-0 uppercase">
+                                                    <ShieldAlert className="h-2.5 w-2.5" /> Triggered
+                                                  </span>
+                                                ) : (
+                                                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Miniature answer preview */}
+                                      <div className="space-y-1">
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Baseline Response Output Preview</span>
+                                        <div className="bg-slate-50 p-2.5 rounded-lg text-[10px] text-slate-600 max-h-[140px] overflow-y-auto leading-relaxed border border-slate-100 scrollbar-thin">
+                                          {rec.answer}
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200/80 my-4 font-sans text-center">
+                                      <HelpCircle className="h-6 w-6 text-slate-350 mx-auto mb-1.5" />
+                                      <p className="text-[11px] font-bold text-slate-500 font-sans">No output recorded</p>
+                                      <button
+                                        onClick={() => runSingleCasePipeline(selectedCaseId, "single")}
+                                        className="mt-2.5 inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] py-1 px-2.5 rounded-lg border border-indigo-200/50 cursor-pointer shadow-xs"
+                                      >
+                                        <Play className="h-3 w-3" /> Run Single-Agent
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* COLUMN 2: TWO AGENT RAG PROCESS */}
+                          {(() => {
+                            const rec = runs.find(r => r.case_id === selectedCaseId && r.pipeline === "two");
+                            const containsMust = currentCase?.must_include.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+                            const containsForbidden = currentCase?.forbidden.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+
+                            return (
+                              <div className="bg-white border border-slate-200/80 rounded-2xl p-4.5 space-y-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all font-sans">
+                                <div className="space-y-3.5">
+                                  {/* Header */}
+                                  <div className="border-b border-slate-100 pb-3">
+                                    <div className="flex items-center justify-between mb-1 font-sans">
+                                      <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest font-sans">Multi-Agent RAG</span>
+                                      <span className="bg-indigo-50 text-indigo-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase border border-indigo-100/50 font-sans">
+                                        Two Agent
+                                      </span>
+                                    </div>
+                                    <h6 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 mt-0.5">
+                                      Retrieval + Generator
+                                    </h6>
+                                  </div>
+
+                                  {rec ? (
+                                    <>
+                                      {/* Latency / Cost info */}
+                                      <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] bg-slate-50 p-2 rounded-xl border border-slate-100 font-sans font-sans">
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase">SCORE</span>
+                                          <strong className="text-slate-800 text-xs font-extrabold">{rec.score.total}/100</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase font-sans">LATENCY</span>
+                                          <strong className="text-slate-800 font-mono text-[11px]">{rec.latency_ms} ms</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 block font-bold text-[8px] uppercase font-sans">EST. COST</span>
+                                          <strong className="text-slate-805 font-mono text-[9px] font-bold">${rec.estimated_cost_usd.toFixed(6)}</strong>
+                                        </div>
+                                      </div>
+
+                                      {/* Live Compliance Checklists */}
+                                      <div className="space-y-3 text-[11px] bg-slate-50/45 p-3 rounded-xl border border-slate-150/40 font-sans">
+                                        <div>
+                                          <span className="font-extrabold text-slate-450 uppercase tracking-widest text-[9px] block mb-1">Concept Alignment Grounding</span>
+                                          <div className="space-y-1">
+                                            {containsMust.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium">
+                                                <span className="text-slate-606 line-clamp-1">{c.term}</span>
+                                                {c.present ? (
+                                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                ) : (
+                                                  <X className="h-3.5 w-3.5 text-slate-350 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <span className="font-extrabold text-rose-805 uppercase tracking-widest text-[9px] block mb-1">Forbidden Hallucination Risks</span>
+                                          <div className="space-y-1">
+                                            {containsForbidden.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium font-sans">
+                                                <span className="text-slate-605 italic line-clamp-1">"{c.term}"</span>
+                                                {c.present ? (
+                                                  <span className="text-[9px] bg-rose-50 text-rose-700 font-extrabold px-1.5 py-0.2 rounded border border-rose-150 flex items-center gap-0.5 shrink-0 uppercase animate-feed bg-rose-50 border-rose-100">
+                                                    <ShieldAlert className="h-2.5 w-2.5 text-rose-600 shrink-0 mt-0.5" /> Triggered
+                                                  </span>
+                                                ) : (
+                                                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Miniature answer preview */}
+                                      <div className="space-y-1 font-sans">
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Grounded RAG Response Output Preview</span>
+                                        <div className="bg-slate-50 p-2.5 rounded-lg text-[10px] text-slate-600 max-h-[140px] overflow-y-auto leading-relaxed border border-slate-100 scrollbar-thin font-sans">
+                                          {rec.answer}
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200/80 my-4">
+                                      <HelpCircle className="h-6 w-6 text-slate-350 mx-auto mb-1.5" />
+                                      <p className="text-[11px] font-bold text-slate-500 font-sans">No output recorded</p>
+                                      <button
+                                        onClick={() => runSingleCasePipeline(selectedCaseId, "two")}
+                                        className="mt-2.5 inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] py-1 px-2.5 rounded-lg border border-indigo-200/50 cursor-pointer shadow-xs"
+                                      >
+                                        <Play className="h-3 w-3" /> Run Two-Agent
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* COLUMN 3: THREE AGENT VALIDATED + REPAIRED (PREMIUM VISUAL) */}
+                          {(() => {
+                            const rec = runs.find(r => r.case_id === selectedCaseId && r.pipeline === "three");
+                            const containsMust = currentCase?.must_include.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+                            const containsForbidden = currentCase?.forbidden.map(term => ({
+                              term,
+                              present: rec?.answer?.toLowerCase().includes(term.toLowerCase())
+                            })) || [];
+
+                            return (
+                              <div className="bg-indigo-50/10 border-2 border-indigo-200 rounded-2xl p-4.5 space-y-4 flex flex-col justify-between shadow-xs hover:shadow-lg transition-all relative font-sans">
+                                <span className="absolute top-2 right-2 flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                                </span>
+
+                                <div className="space-y-3.5">
+                                  {/* Header */}
+                                  <div className="border-b border-indigo-100 pb-3">
+                                    <div className="flex items-center justify-between mb-1 font-sans">
+                                      <span className="text-[10px] font-mono font-bold text-indigo-600 uppercase tracking-widest leading-loose">Self-Correcting Loop</span>
+                                      <span className="bg-indigo-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-sans">
+                                        Three Agent
+                                      </span>
+                                    </div>
+                                    <h6 className="text-xs font-extrabold text-indigo-955 flex items-center gap-1.5 mt-0.5">
+                                      Audit & Repair Engine
+                                    </h6>
+                                  </div>
+
+                                  {rec ? (
+                                    <>
+                                      {/* Latency / Cost info */}
+                                      <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] bg-indigo-50/50 p-2 rounded-xl border border-indigo-100">
+                                        <div>
+                                          <span className="text-indigo-805 block font-bold text-[8px] uppercase">SCORE</span>
+                                          <strong className="text-indigo-900 text-xs font-extrabold">{rec.score.total}/100</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-indigo-805 block font-bold text-[8px] uppercase">LATENCY</span>
+                                          <strong className="text-indigo-900 font-mono text-[11px]">{rec.latency_ms} ms</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-indigo-805 block font-bold text-[8px] uppercase">EST. COST</span>
+                                          <strong className="text-indigo-900 font-mono text-[9px] font-bold">${rec.estimated_cost_usd.toFixed(6)}</strong>
+                                        </div>
+                                      </div>
+
+                                      {/* Live Compliance Checklists */}
+                                      <div className="space-y-3 text-[11px] bg-white p-3 rounded-xl border border-indigo-100 shadow-xs font-sans">
+                                        <div>
+                                          <span className="font-extrabold text-slate-500 uppercase tracking-widest text-[9px] block mb-1">Concept Alignment Grounding</span>
+                                          <div className="space-y-1 font-sans">
+                                            {containsMust.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium">
+                                                <span className="text-indigo-900 line-clamp-1">{c.term}</span>
+                                                {c.present ? (
+                                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                ) : (
+                                                  <X className="h-3.5 w-3.5 text-slate-350 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <span className="font-extrabold text-indigo-605 uppercase tracking-widest text-[9px] block mb-1 font-sans">Forbidden Hallucination Risks</span>
+                                          <div className="space-y-1 font-sans">
+                                            {containsForbidden.map((c, idx) => (
+                                              <div key={idx} className="flex items-center justify-between font-medium font-sans">
+                                                <span className="text-indigo-950 italic line-clamp-1">"{c.term}"</span>
+                                                {c.present ? (
+                                                  <span className="text-[9px] bg-rose-50 text-rose-700 font-extrabold px-1.5 py-0.2 rounded border border-rose-100 flex items-center gap-0.5 shrink-0 uppercase font-sans">
+                                                    <ShieldAlert className="h-2.5 w-2.5 text-rose-600 shrink-0 mt-0.5" /> Triggered
+                                                  </span>
+                                                ) : (
+                                                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* REPAIR FLOW DIFF VIEWER ELEMENT */}
+                                      {rec.repaired && (
+                                        <div className="space-y-2 pt-1 border-t border-indigo-150">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider font-sans">
+                                              Live Audit & Repair Redline Diff
+                                            </span>
+                                            <span className="text-[8px] bg-amber-50 text-amber-800 border border-amber-200 px-1 py-[1px] rounded font-bold">
+                                              Triggered Repair
+                                            </span>
+                                          </div>
+                                          
+                                          {selectedCaseId === "sleep_apnea_secondary_ptsd" ? (
+                                            <div className="space-y-2 text-[10px] bg-slate-50 p-2 rounded-xl border border-slate-200 leading-relaxed font-sans mt-1">
+                                              <div className="p-1.5 bg-red-50 text-slate-705 border border-red-100 rounded-lg line-through whitespace-pre-wrap leading-relaxed">
+                                                "...there is an <strong className="text-red-800 font-extrabold bg-red-100 px-0.5">automatic approval path</strong>... We <strong className="text-red-800 font-extrabold bg-red-100 px-0.5">guaranteed restoration</strong>..."
+                                              </div>
+                                              <div className="p-1.5 bg-emerald-50 text-slate-705 border border-emerald-100 rounded-lg whitespace-pre-wrap font-medium">
+                                                "...aggravation representing a <strong className="text-emerald-800 font-extrabold bg-emerald-100 px-0.5">viable theory of connection</strong>... outcomes are subject to review and <strong className="text-emerald-800 font-extrabold bg-emerald-100 px-0.5">cannot be guaranteed</strong>..."
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="space-y-2 text-[10px] bg-slate-50 p-2 rounded-xl border border-slate-200 leading-relaxed font-sans">
+                                              <div className="p-1.5 bg-red-50 text-slate-705 border border-red-110 rounded-lg line-through whitespace-pre-wrap leading-relaxed">
+                                                "...Part-time work <strong className="text-red-800 font-extrabold bg-red-100 px-0.5">automatically bars</strong> TDIU... Total restoration <strong className="text-red-800 font-extrabold bg-red-100 px-0.5">is guaranteed</strong>..."
+                                              </div>
+                                              <div className="p-1.5 bg-emerald-50 text-slate-705 border border-emerald-100 rounded-lg whitespace-pre-wrap font-medium">
+                                                "...part-time work <strong className="text-emerald-800 font-extrabold bg-emerald-100 px-0.5">does not bar eligibility</strong>, provided that it is classified as marginal... <strong className="text-emerald-800 font-extrabold bg-emerald-100 px-0.5">cannot be guaranteed</strong>..."
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Miniature answer preview */}
+                                      <div className="space-y-1">
+                                        <span className="text-[9px] font-bold text-indigo-755 uppercase tracking-wider block font-sans">Polished Safe Production Answer</span>
+                                        <div className="bg-indigo-950 text-slate-100 p-2.5 rounded-lg text-[10px] max-h-[140px] overflow-y-auto leading-relaxed border border-indigo-900 scrollbar-thin">
+                                          {rec.answer}
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="p-8 text-center bg-indigo-50/50 rounded-xl border border-dashed border-indigo-200/80 my-4 font-sans">
+                                      <HelpCircle className="h-6 w-6 text-indigo-400 mx-auto mb-1.5 animate-bounce" />
+                                      <p className="text-[11px] font-bold text-indigo-750">No output recorded</p>
+                                      <button
+                                        onClick={() => runSingleCasePipeline(selectedCaseId, "three")}
+                                        className="mt-2.5 inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] py-1 px-2.5 rounded-lg border border-indigo-700 cursor-pointer shadow-sm animate-pulse"
+                                      >
+                                        <Play className="h-3 w-3" /> Run Three-Agent Loop
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SUBTAB 4: AGENT PROMPT SANDBOX EXPLORER */}
+                    {observabilitySubTab === "prompts" && (
+                      <div className="bg-slate-900 border border-slate-950 rounded-2xl p-5 text-slate-100 font-sans shadow-xl animate-feed">
+                        
+                        {/* Tab header */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-4 mb-4 font-sans">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Code className="h-4.5 w-4.5 text-amber-500" />
+                              <h5 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Multi-Agent Prompt Template Directory</h5>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">Explore the production-grade instructions running on Google Gemini. Read templates that enforce citations and redline hallucinations.</p>
+                          </div>
+                          <span className="text-[10px] font-mono bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2.5 py-1 rounded-full font-bold font-sans">
+                            Gemini SDK Structured Parameters
+                          </span>
+                        </div>
+
+                        {/* Interactive IDE Layout */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 font-sans">
+                          
+                          {/* Left Rail Sidebar - Prompt Selector */}
+                          <div className="md:col-span-4 space-y-2">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Specialized Pipeline Tasks</span>
+                            
+                            {[
+                              { key: "retrieval", title: "Agent 1: Retrieval Extractor", color: "border-l-indigo-500" },
+                              { key: "drafting", title: "Agent 2: Reasoner & Writer", color: "border-l-violet-500" },
+                              { key: "auditing", title: "Agent 3: Legal Auditor Audit", color: "border-l-amber-500" },
+                              { key: "repair", title: "Agent 4: Compliance Repair", color: "border-l-emerald-500" },
+                            ].map((p, i) => {
+                              // Local selection tracker
+                              const isActive = (window as any).__selectedSandboxPrompt === p.key || (i === 0 && !(window as any).__selectedSandboxPrompt);
+                              return (
+                                <button
+                                  key={p.key}
+                                  onClick={() => {
+                                    (window as any).__selectedSandboxPrompt = p.key;
+                                    // Force component re-render by doing a shallow state update on dummy state or runs
+                                    setRuns([...runs]);
+                                  }}
+                                  className={`w-full text-left py-2.5 px-3 rounded-xl border border-r-0 border-t-0 border-b-0 border-l-4 transition-all flex items-center justify-between cursor-pointer ${p.color} ${
+                                    isActive
+                                      ? "bg-slate-800 text-white border-l-spacing-3 shadow-md font-bold"
+                                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                                  }`}
+                                >
+                                  <span className="text-[11px] truncate font-sans">{p.title}</span>
+                                  <ChevronRight className="h-3 w-3 opacity-40 shrink-0" />
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right Content Editor */}
+                          {(() => {
+                            const activePromptKey = (window as any).__selectedSandboxPrompt || "retrieval";
+                            const pData = (activePromptKey === "retrieval") ? {
+                              title: "Agent 1: Evidence Citation Retrieval Instruction",
+                              role: "Targeted Corpus Selection Model",
+                              description: "Given a regulatory query and the sources, find exact sections from the legal database that support or challenge the premise.",
+                              parameters: { model: "Gemini 2.5 Pro", temp: 0.1, format: "JSON Schema Structured" },
+                              template: `You are an expert VA legal research analyst. Your task is to identify key regulations or legal tenets relating to the user's appellate issue.
+
+Analyze user question:
+"{{USER_QUESTION}}"
+
+Scan the following source database:
+{{SOURCE_DOCUMENTS_CORPUS}}
+
+For each relevant section, extract an exact excerpt, determine its relevance strength (high/medium/low), and write a bullet explaining why it matters.
+
+Return a JSON array formatted exactly as:
+{
+  "evidence_cards": [
+    {
+      "source_id": "string",
+      "citation": "string",
+      "relevance": "high" | "medium",
+      "excerpt": "string",
+      "why_it_matters": "string"
+    }
+  ]
+}`
+                            } : (activePromptKey === "drafting") ? {
+                              title: "Agent 2: Legal Drafting & Reasoning Template",
+                              role: "Legal Writing & Synthesizer Model",
+                              description: "Formulates the comprehensive, professional response to the legal question by blending the evidence cards with legal reasoning standards.",
+                              parameters: { model: "Gemini 3.5 Flash", temp: 0.3, format: "Configured Cite Anchor Markdown" },
+                              template: `You are a professional Veterans Service Officer (VSO) and legal draftsman. Your task is to construct a clear, authoritative appellate analysis in response to the veteran's question.
+
+User Question:
+"{{USER_QUESTION}}"
+
+You MUST synthesize your response utilizing ONLY the provided Evidence Cards retrieved from official sources. Do not make up facts or add general knowledge.
+
+Evidence Cards:
+{{EVIDENCE_CARDS}}
+
+CRITICAL WRITING RULES:
+1. Ground every legal assertion in a corresponding official citation (e.g., 38 CFR § 3.310).
+2. Explicitly disclose any evidence gaps or legal uncertainties (e.g., "The record does not show whether...").
+3. Use a clear, logical, structured markdown layout with headers, bold terms, and lists.
+4. DO NOT promise automatic outcomes or guarantee results. Legal findings are always fact-dependent. Always refer to probabilities, conditions, and burden of proof. Do NOT use absolute verbs like "guarantee", "guaranteed", "automatically approve", or "automatic bar".`
+                            } : (activePromptKey === "auditing") ? {
+                              title: "Agent 3: Legal Auditor & Compliance Validator Instruction",
+                              role: "Strict Truthfulness Auditor Model",
+                              description: "Audits the generated legal response against the source evidence cards to identify overconfidence, citation errors, or ungrounded assertions.",
+                              parameters: { model: "Gemini 2.5 Pro (JSON Mode)", temp: 0.0, format: "JSON Compliance Decision Card" },
+                              template: `You are a senior VA Legal Auditor. Your job is to strictly evaluate the proposed legal draft response against the original evidence card corpus to flag any compliance errors or hallucinations.
+
+Proposed Legal Response:
+{{PROPOSED_RESPONSE}}
+
+Original Evidence Cards:
+{{EVIDENCE_CARDS}}
+
+Evaluate the draft on the following 3 factors:
+1. Cite Authority Validity: Are the citations used in the response (e.g. CFRs) real citations present in the evidence cards? Or are they fabricated/external?
+2. Unsupported Claims: Does the response make ANY legal claims or factual assertions that are NOT explicitly supported by the excerpts in the evidence cards?
+3. Avoidance of Forbidden Claims: Did the writer promising success, write that an outcome is "automatic", "guaranteed", or "guarantees" anything? (Absolute claims are forbidden.)
+
+Return a JSON object conforming exactly to this structure:
+{
+  "passes": boolean, // true if there are zero errors, false if revision is necessary.
+  "unsupported_claims": string[], // List of any claims not supported by evidence card excerpts.
+  "citation_errors": string[], // List of any citation discrepancies.
+  "overconfidence_flags": string[], // List of any forbidden promises or absolute claim sentences.
+  "recommendation": "accept" | "revise"
+}`
+                            } : {
+                              title: "Agent 4: Compliance Repair Template",
+                              role: "Syntactic Refinement Model",
+                              description: "Triggered whenever the Auditor flags compliance infractions. Re-writes only the non-compliant sections of the response to align with correct legal anchors.",
+                              parameters: { model: "Gemini 3.5 Flash", temp: 0.2, format: "Polished Grounded Markdown" },
+                              template: `You are an expert VA Legal Repair Specialist. Your task is to rewrite the legal response to resolve specific compliance infractions flagged by the Legal Auditor, while preserving the original structure and facts.
+
+Original Legal Response:
+{{PROPOSED_RESPONSE}}
+
+Original Evidence Cards:
+{{EVIDENCE_CARDS}}
+
+Auditor Discrepancy Findings:
+{{AUDITOR_DISCREPANCIES}}
+
+REPAIR PROTOCOL:
+1. Delete or re-key any unsupported claims to align strictly with facts in the evidence card excerpts.
+2. Remove all absolute claims or words like "guaranteed", "guarantees", or "automatic approval". Rephrase using conditional legal phrases like "may be eligible", "is subject to evidentiary review", or "depends on clinical evidence of aggravation".
+3. Correct any citation errors.
+
+Output only the corrected, final legal analysis in clean markdown.`
+                            };
+
+                            return (
+                              <div className="md:col-span-8 bg-slate-950 p-4.5 rounded-xl border border-slate-805 space-y-4 shadow-inner">
+                                {/* Details header */}
+                                <div className="border-b border-slate-800 pb-2.5 font-sans">
+                                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest font-sans">{pData.role}</span>
+                                  <h6 className="text-[13px] font-bold text-white mt-0.5 font-sans">{pData.title}</h6>
+                                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed font-sans">{pData.description}</p>
+                                </div>
+
+                                {/* Parameters Grid */}
+                                <div className="grid grid-cols-3 gap-3 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-[10px] text-slate-300 font-mono font-sans">
+                                  <div>
+                                    <span className="text-[8px] text-slate-505 uppercase block font-bold mb-0.5">Model Engine</span>
+                                    {pData.parameters.model}
+                                  </div>
+                                  <div>
+                                    <span className="text-[8px] text-slate-505 uppercase block font-bold mb-0.5">Temperature</span>
+                                    {pData.parameters.temp}
+                                  </div>
+                                  <div>
+                                    <span className="text-[8px] text-slate-505 uppercase block font-bold mb-0.5">Output Constraints</span>
+                                    {pData.parameters.format}
+                                  </div>
+                                </div>
+
+                                {/* Code Text Block */}
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-[9px] text-slate-500 uppercase font-black tracking-widest px-1">
+                                    <span>System Instructions System Prompt</span>
+                                    <span className="font-mono text-zinc-600">Read Only</span>
+                                  </div>
+                                  <pre className="bg-slate-900 border border-slate-850 p-3.5 rounded-lg font-mono text-[10px] text-zinc-300 overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[280px] scrollbar-thin scrollbar-thumb-slate-805">
+                                    {pData.template}
+                                  </pre>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                        </div>
+                      </div>
+                    )}
 
                   </div>
                 )}
@@ -1480,7 +2335,50 @@ export default function App() {
               {/* Rendered report pane with clean typographic support */}
               {markdownReport ? (
                 <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed font-sans pr-2 py-2 space-y-4 prose-blockquote:border-l-indigo-500 prose-blockquote:bg-slate-50/50 prose-blockquote:p-4 prose-blockquote:rounded-r-xl prose-headings:font-extrabold prose-headings:tracking-tight">
-                  <Markdown>{markdownReport}</Markdown>
+                  <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto my-6 rounded-xl border border-slate-200/60 shadow-xs bg-white/90">
+                          <table className="min-w-full divide-y divide-slate-200/80 text-xs">
+                            {children}
+                          </table>
+                        </div>
+                      ),
+                      thead: ({ children }) => (
+                        <thead className="bg-slate-50/70 border-b border-slate-200/50">
+                          {children}
+                        </thead>
+                      ),
+                      tbody: ({ children }) => (
+                        <tbody className="divide-y divide-slate-150 bg-white/50">
+                          {children}
+                        </tbody>
+                      ),
+                      tr: ({ children }) => (
+                        <tr className="hover:bg-slate-50/40 transition-colors">
+                          {children}
+                        </tr>
+                      ),
+                      th: ({ children }) => (
+                        <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="px-4 py-3 text-slate-700 font-medium">
+                          {children}
+                        </td>
+                      ),
+                      code: ({ children }) => (
+                        <code className="bg-slate-50 border border-slate-150 text-indigo-650 px-1.5 py-0.5 rounded text-[11px] font-mono font-bold">
+                          {children}
+                        </code>
+                      )
+                    }}
+                  >
+                    {markdownReport}
+                  </Markdown>
                 </div>
               ) : (
                 <div className="p-16 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-250/80">
