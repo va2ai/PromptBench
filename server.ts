@@ -45,9 +45,9 @@ function getGeminiClient(): GoogleGenAI {
   return geminiClient;
 }
 
-// Helper to manage rate-limiting under the Gemini 5 RPM Free Tier quota
+// Helper to manage rate-limiting under the Gemini Free Tier quotas (e.g., 5 RPM standard, 15 RPM for lite)
 let lastRequestTime = 0;
-let currentMinGapMs = 15500; // Starting baseline: 15.5s minimum gap between requests
+let currentMinGapMs = 6000; // Starting baseline gap in ms
 
 interface QueueItem {
   params: any;
@@ -78,17 +78,29 @@ async function runQueue() {
 }
 
 // Inner helper to execute a single request, handling retries and throttling
-async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initialDelayMs = 25000): Promise<any> {
+async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initialDelayMs = 10000): Promise<any> {
   const client = getGeminiClient();
   let attempt = 0;
+  
+  // Set model-specific baseline targets
+  const modelName = params.model || "gemini-3.5-flash";
+  let baselineGap = 6000; // Defaults to 6.0s for gemini-3.5-flash
+  if (modelName.includes("lite")) {
+    baselineGap = 2500; // Ultra low-latency models have high free limits, 2.5s is safe
+  }
+
   while (true) {
     try {
       // Direct rate-limiting throttling helper
       const now = Date.now();
       const elapsed = now - lastRequestTime;
+      
+      // Ensure current gap doesn't sit below our target baseline for this model
+      currentMinGapMs = Math.max(currentMinGapMs, baselineGap);
+
       if (elapsed < currentMinGapMs) {
         const waitTime = currentMinGapMs - elapsed;
-        console.log(`[Gemini API Throttle] Pausing for ${(waitTime / 1000).toFixed(1)}s to protect Free Tier 5 RPM quota (current gap: ${(currentMinGapMs / 1000).toFixed(1)}s)...`);
+        console.log(`[Gemini API Throttle] Pausing for ${(waitTime / 1000).toFixed(1)}s to protect Free Tier quota (gap: ${(currentMinGapMs / 1000).toFixed(1)}s, model: ${modelName})...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
 
@@ -96,8 +108,8 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
       lastRequestTime = Date.now();
       const result = await client.models.generateContent(params);
       
-      // On success, slowly cool down the gap towards the baseline (15.5s)
-      currentMinGapMs = Math.max(currentMinGapMs - 1000, 15500);
+      // On success, slowly cool down the gap towards the baseline (decrement by 1s)
+      currentMinGapMs = Math.max(currentMinGapMs - 1000, baselineGap);
       return result;
     } catch (err: any) {
       attempt++;
@@ -120,17 +132,20 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
         // Adaptively increase the current gap on rate-limiting to protect future queue requests
         currentMinGapMs = Math.min(currentMinGapMs + 5000, 30000);
 
-        // Calculate retry delay with exponential backoff on fallback initial delay
-        let delay = initialDelayMs * Math.pow(1.5, attempt - 1);
+        // Calculate retry delay with exponential backoff on fallback initial delay (gentler growth)
+        let delay = initialDelayMs * Math.pow(1.3, attempt - 1);
         
         // Parse "retry in X.Y s" from error body if present
         const match = errString.match(/retry in\s+([\d\.]+)\s*s/i);
         if (match && match[1]) {
           const parsedSecs = parseFloat(match[1]);
           if (!isNaN(parsedSecs)) {
-            delay = (parsedSecs + 5) * 1000; // Add extra 5-second buffer (up from 3s) for network jitter and timing offsets
+            delay = (parsedSecs + 2) * 1000; // Add extra 2-second buffer for network jitter
           }
         }
+        
+        // Cap max retry delay since Gemini quota windows reset every 60 seconds
+        delay = Math.min(delay, 40000);
         
         console.warn(`[Gemini API Rate Limit] Attempt ${attempt} failed with 429. Dynamic gap increased to ${(currentMinGapMs / 1000).toFixed(1)}s. Waiting ${(delay / 1000).toFixed(1)}s before retry...`);
         
@@ -147,7 +162,7 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
 }
 
 // Helper to call generateContent with retry on rate limit / 429 quota limits (serialized globally)
-async function generateContentWithRetry(params: any, maxRetries = 12, initialDelayMs = 25000): Promise<any> {
+async function generateContentWithRetry(params: any, maxRetries = 12, initialDelayMs = 10000): Promise<any> {
   return new Promise((resolve, reject) => {
     apiQueue.push({ params, maxRetries, initialDelayMs, resolve, reject });
     runQueue();
@@ -469,7 +484,7 @@ app.post("/api/save-sources", (req, res) => {
 });
 
 // Pipeline Engine Core
-async function executeSingleAgent(question: string, sources: any[]): Promise<{
+async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
   answer: string;
   citations_used: string[];
   prompt_tokens: number;
@@ -492,7 +507,7 @@ ${question}
 Your response must be JSON matching the required schema. Ensure the answer is structured with headings or lists where appropriate.`;
 
   const response = await generateContentWithRetry({
-    model: "gemini-3.5-flash",
+    model: modelName,
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -520,7 +535,7 @@ Your response must be JSON matching the required schema. Ensure the answer is st
 }
 
 // Two-Agent Core
-async function executeTwoAgent(question: string, sources: any[]): Promise<{
+async function executeTwoAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -546,7 +561,7 @@ ${question}
 Response must be structured JSON.`;
 
   const retrieverResponse = await generateContentWithRetry({
-    model: "gemini-3.5-flash",
+    model: modelName,
     contents: retrievalPrompt,
     config: {
       responseMimeType: "application/json",
@@ -591,7 +606,7 @@ ${JSON.stringify(evidenceCards, null, 2)}
 Response must be structured JSON.`;
 
   const reasonerResponse = await generateContentWithRetry({
-    model: "gemini-3.5-flash",
+    model: modelName,
     contents: reasoningPrompt,
     config: {
       responseMimeType: "application/json",
@@ -633,7 +648,7 @@ Response must be structured JSON.`;
 }
 
 // Three-Agent Core with Validation & Single-Turn Repair
-async function executeThreeAgent(question: string, sources: any[]): Promise<{
+async function executeThreeAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -653,7 +668,7 @@ async function executeThreeAgent(question: string, sources: any[]): Promise<{
   const client = getGeminiClient();
 
   // 1 & 2. Get retrieval evidence and draft answer using same sequence
-  const pipelineB = await executeTwoAgent(question, sources);
+  const pipelineB = await executeTwoAgent(question, sources, modelName);
 
   let runPromptTokens = pipelineB.prompt_tokens;
   let runOutputTokens = pipelineB.output_tokens;
@@ -678,7 +693,7 @@ ${JSON.stringify(pipelineB.citations_used)}
 You must output a highly strict validation response matching the JSON schema. Set recommendation to "accept" if it passes perfectly, otherwise "revise".`;
 
   const validatorResponse = await generateContentWithRetry({
-    model: "gemini-3.5-flash",
+    model: modelName,
     contents: validationPrompt,
     config: {
       responseMimeType: "application/json",
@@ -738,7 +753,7 @@ Flagged Grounding Errors to fix:
 Please output the revised answer, strictly resolving all errors in the output schema.`;
 
     const repairResponse = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: modelName,
       contents: repairPrompt,
       config: {
         responseMimeType: "application/json",
@@ -900,7 +915,9 @@ Based on the quantitative metrics:
 
 // RUN Single Benchmark route
 app.post("/api/run-single-pipeline", async (req, res) => {
-  const { caseId, pipeline } = req.body;
+  const { caseId, pipeline, model } = req.body;
+  const modelName = model || "gemini-3.5-flash";
+  
   if (!caseId || !pipeline) {
     return res.status(400).json({ error: "caseId and pipeline are required." });
   }
@@ -918,7 +935,7 @@ app.post("/api/run-single-pipeline", async (req, res) => {
     let result: any = null;
 
     if (pipeline === "single") {
-      const run = await executeSingleAgent(activeCase.question, sources);
+      const run = await executeSingleAgent(activeCase.question, sources, modelName);
       const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -936,7 +953,7 @@ app.post("/api/run-single-pipeline", async (req, res) => {
         estimated_cost_usd: cost,
       };
     } else if (pipeline === "two") {
-      const run = await executeTwoAgent(activeCase.question, sources);
+      const run = await executeTwoAgent(activeCase.question, sources, modelName);
       const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -954,7 +971,7 @@ app.post("/api/run-single-pipeline", async (req, res) => {
         estimated_cost_usd: cost,
       };
     } else if (pipeline === "three") {
-      const run = await executeThreeAgent(activeCase.question, sources);
+      const run = await executeThreeAgent(activeCase.question, sources, modelName);
       const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -995,6 +1012,9 @@ app.post("/api/run-single-pipeline", async (req, res) => {
 
 // Run-All Pipelines route
 app.post("/api/run-all-pipelines", async (req, res) => {
+  const { model } = req.body;
+  const modelName = model || "gemini-3.5-flash";
+
   const cases = loadTestCases();
   const sources = loadSources();
   const results: any[] = [];
@@ -1007,7 +1027,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
       try {
         let result: any = null;
         if (pipeline === "single") {
-          const run = await executeSingleAgent(activeCase.question, sources);
+          const run = await executeSingleAgent(activeCase.question, sources, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1025,7 +1045,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             estimated_cost_usd: cost,
           };
         } else if (pipeline === "two") {
-          const run = await executeTwoAgent(activeCase.question, sources);
+          const run = await executeTwoAgent(activeCase.question, sources, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1043,7 +1063,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             estimated_cost_usd: cost,
           };
         } else {
-          const run = await executeThreeAgent(activeCase.question, sources);
+          const run = await executeThreeAgent(activeCase.question, sources, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);

@@ -251,6 +251,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report">("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
 
   // Core Data State
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -315,14 +316,14 @@ export default function App() {
     const logPrefix = `[Pipeline: ${pipeline.toUpperCase()}]`;
     setBenchmarkLogs((prev) => [
       ...prev,
-      `[${new Date().toLocaleTimeString()}] ${logPrefix} Launching run on case: "${caseId}"...`,
+      `[${new Date().toLocaleTimeString()}] ${logPrefix} Launching run on case: "${caseId}" using model: "${selectedModel}"...`,
     ]);
 
     try {
       const resp = await fetch("/api/run-single-pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseId, pipeline }),
+        body: JSON.stringify({ caseId, pipeline, model: selectedModel }),
       });
 
       if (!resp.ok) {
@@ -364,42 +365,73 @@ export default function App() {
     setLoading(true);
     setApiKeyMissing(false);
     setBenchmarkLogs([
-      `[${new Date().toLocaleTimeString()}] 🚀 Initiating Full Comparative Evaluation Harness...`,
-      `[System] Loading ${testCases.length || 3} Test Cases and ${sources.length || 4} Rules / Source documents.`,
+      `[${new Date().toLocaleTimeString()}] 🚀 Initiating Full Comparative Evaluation Harness with model: "${selectedModel}"...`,
+      `[System] Scheduling ${testCases.length} Test Cases across 3 pipeline architectures (9 runs total).`,
+      `[System] Iterating sequentially to prevent HTTP timeouts and provide real-time grounding telemetry...`
     ]);
 
+    let successCount = 0;
+    let failedCount = 0;
+    const pipelines: ("single" | "two" | "three")[] = ["single", "two", "three"];
+
     try {
-      const resp = await fetch("/api/run-all-pipelines", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      for (const testCase of testCases) {
+        for (const pipeline of pipelines) {
+          const logPrefix = `[${testCase.id} / ${pipeline.toUpperCase()}]`;
+          setBenchmarkLogs((prev) => [
+            ...prev,
+            `[${new Date().toLocaleTimeString()}] ⏱️ ${logPrefix} Launching pipeline run...`,
+          ]);
 
-      if (!resp.ok) {
-        const errObj = await resp.json();
-        throw new Error(errObj.error || "Batch run failed");
-      }
+          try {
+            const resp = await fetch("/api/run-single-pipeline", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ caseId: testCase.id, pipeline, model: selectedModel }),
+            });
 
-      const data = await resp.json();
-      if (data.success) {
-        if (data.results && data.results.length > 0) {
-          setRuns(data.results);
+            if (!resp.ok) {
+              const errObj = await resp.json();
+              throw new Error(errObj.error || "Execution failed");
+            }
+
+            const data = await resp.json();
+            if (data.success && data.result) {
+              successCount++;
+              setRuns((prev) => {
+                const filtered = prev.filter((r) => !(r.case_id === testCase.id && r.pipeline === pipeline));
+                return [data.result, ...filtered];
+              });
+              setBenchmarkLogs((prev) => [
+                ...prev,
+                `[${new Date().toLocaleTimeString()}] ✓ ${logPrefix} Quality score: ${data.result.score.total}/100. Latency: ${data.result.latency_ms}ms. Cost: $${data.result.estimated_cost_usd.toFixed(5)}`,
+              ]);
+              fetchReport();
+            }
+          } catch (err: any) {
+            console.error(err);
+            failedCount++;
+            if (err.message.includes("GEMINI_API_KEY") || err.message.includes("key")) {
+              setApiKeyMissing(true);
+            }
+            setBenchmarkLogs((prev) => [
+              ...prev,
+              `[${new Date().toLocaleTimeString()}] ❌ ${logPrefix} Failed: ${err.message}`,
+              `[Advice] Grounding comparison can run in fallback mode. Add a valid GEMINI_API_KEY in Settings > Secrets to make live LLM agent runs.`,
+            ]);
+          }
         }
-        setBenchmarkLogs((prev) => [
-          ...prev,
-          `[${new Date().toLocaleTimeString()}] ✅ Batch workflow completed: executed ${data.count} agent pipelines.`,
-          `[System] Repopulating grounded reports and saving run logs inside "outputs/runs/".`,
-        ]);
-        fetchReport();
       }
-    } catch (err: any) {
-      console.error(err);
-      if (err.message.includes("GEMINI_API_KEY") || err.message.includes("key")) {
-        setApiKeyMissing(true);
-      }
+
       setBenchmarkLogs((prev) => [
         ...prev,
-        `[${new Date().toLocaleTimeString()}] ❌ Failed to run live batch workflow: ${err.message}`,
-        `[Advice] Presenting calculated high-fidelity benchmarks. Add your GEMINI_API_KEY in parameters if you want the actual model endpoints to run in real-time.`,
+        `[${new Date().toLocaleTimeString()}] 🎉 Sweep complete! Success: ${successCount}, Failed: ${failedCount}.`,
+      ]);
+    } catch (err: any) {
+      console.error(err);
+      setBenchmarkLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ❌ Sweep interrupted: ${err.message}`,
       ]);
     } finally {
       setLoading(false);
@@ -650,6 +682,21 @@ export default function App() {
                 <p className="text-[11px] leading-relaxed text-slate-500 mb-4">
                   Run individual scenario tests against specific configurations, or dispatch a complete benchmark sweep of the pipelines.
                 </p>
+
+                <div className="mb-4 bg-slate-50/50 p-2.5 rounded-xl border border-slate-150/80">
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider mb-1">
+                    Select LLM Engine
+                  </span>
+                  <select
+                    id="llm-model-select"
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 font-semibold text-left"
+                  >
+                    <option value="gemini-3.5-flash">gemini-3.5-flash (Standard Precision)</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra-Fast / High Limits)</option>
+                  </select>
+                </div>
 
                 <div className="space-y-2.5">
                   <motion.button
