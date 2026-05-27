@@ -83,7 +83,7 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
   let attempt = 0;
   
   // Set model-specific baseline targets
-  const modelName = params.model || "gemini-3.5-flash";
+  const modelName = params.model || "gemini-3.1-flash";
   let baselineGap = 6000; // Defaults to 6.0s for gemini-3.5-flash
   if (modelName.includes("lite")) {
     baselineGap = 2500; // Ultra low-latency models have high free limits, 2.5s is safe
@@ -484,7 +484,7 @@ app.post("/api/save-sources", (req, res) => {
 });
 
 // Pipeline Engine Core
-async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
+async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
   answer: string;
   citations_used: string[];
   prompt_tokens: number;
@@ -535,7 +535,7 @@ Your response must be JSON matching the required schema. Ensure the answer is st
 }
 
 // Two-Agent Core
-async function executeTwoAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
+async function executeTwoAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -648,7 +648,7 @@ Response must be structured JSON.`;
 }
 
 // Three-Agent Core with Validation & Single-Turn Repair
-async function executeThreeAgent(question: string, sources: any[], modelName = "gemini-3.5-flash"): Promise<{
+async function executeThreeAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -916,7 +916,7 @@ Based on the quantitative metrics:
 // RUN Single Benchmark route
 app.post("/api/run-single-pipeline", async (req, res) => {
   const { caseId, pipeline, model } = req.body;
-  const modelName = model || "gemini-3.5-flash";
+  const modelName = model || "gemini-3.1-flash";
   
   if (!caseId || !pipeline) {
     return res.status(400).json({ error: "caseId and pipeline are required." });
@@ -1013,7 +1013,7 @@ app.post("/api/run-single-pipeline", async (req, res) => {
 // Run-All Pipelines route
 app.post("/api/run-all-pipelines", async (req, res) => {
   const { model } = req.body;
-  const modelName = model || "gemini-3.5-flash";
+  const modelName = model || "gemini-3.1-flash";
 
   const cases = loadTestCases();
   const sources = loadSources();
