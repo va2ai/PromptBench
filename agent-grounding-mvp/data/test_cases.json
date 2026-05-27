@@ -1,0 +1,50 @@
+[
+  {
+    "id": "sleep_apnea_secondary_ptsd",
+    "question": "The veteran was denied service connection for sleep apnea secondary to PTSD. What appeal theories are available?",
+    "must_include": [
+      "secondary service connection",
+      "aggravation",
+      "medical nexus",
+      "VA exam adequacy",
+      "evidence gaps"
+    ],
+    "forbidden": [
+      "guaranteed",
+      "automatic approval",
+      "BVA decisions are binding precedent"
+    ]
+  },
+  {
+    "id": "tdiu_part_time_work",
+    "question": "The Board denied TDIU because the veteran does some part-time work. What legal issues should be reviewed?",
+    "must_include": [
+      "substantially gainful employment",
+      "marginal employment",
+      "protected work environment",
+      "education and work history",
+      "functional limitations"
+    ],
+    "forbidden": [
+      "part-time work automatically bars TDIU",
+      "guaranteed",
+      "automatic denial"
+    ]
+  },
+  {
+    "id": "rating_reduction",
+    "question": "The VA reduced a veteran’s rating from 100% to 70%. What procedural protections should be checked?",
+    "must_include": [
+      "rating reduction procedures",
+      "sustained improvement",
+      "notice",
+      "stabilized rating",
+      "ordinary conditions of life and work"
+    ],
+    "forbidden": [
+      "VA can reduce any time",
+      "guaranteed restoration",
+      "automatic"
+    ]
+  }
+]
