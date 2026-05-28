@@ -1376,6 +1376,21 @@ async function callClaudePSpotlight(prompt: string, schema: object): Promise<{
   usage: { input_tokens: number; output_tokens: number; cost_usd: number | null };
 }> {
   return new Promise((resolve, reject) => {
+    // Append a strict single-shot directive. Without this, Claude Code's default system
+    // prompt treats the call as an interactive coding session and will loop trying to use
+    // tools — burning turns + cost without ever writing the structured_output. The
+    // --disallowedTools list blocks every tool we can think of so the model can't even
+    // attempt one; the appended prompt tells it explicitly to respond once, no tools.
+    const singleShotDirective = `
+CRITICAL RUNTIME CONSTRAINTS:
+- You are being called as a structured-output generator, NOT an interactive agent.
+- Respond in EXACTLY ONE turn. Do not attempt any tool use of any kind.
+- Do not call Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, Task, or any other tool.
+- Your only output must be the JSON object conforming to the provided --json-schema.
+- The structured_output is captured separately; the natural-language "result" field can be empty.
+- Do not ask clarifying questions. Do not refuse. Produce the JSON envelope from the prompt as given.
+`.trim();
+
     const child = spawn(
       "claude",
       [
@@ -1383,8 +1398,10 @@ async function callClaudePSpotlight(prompt: string, schema: object): Promise<{
         "--model", "sonnet",
         "--output-format", "json",
         "--json-schema", JSON.stringify(schema),
+        "--append-system-prompt", singleShotDirective,
         "--disable-slash-commands",
-        "--disallowedTools", "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate",
+        "--disallowedTools",
+        "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate,TaskGet,TaskList,TaskOutput,TaskStop,TaskUpdate,NotebookEdit,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,Monitor,ScheduleWakeup,CronCreate,CronDelete,CronList,RemoteTrigger,ToolSearch,Skill",
       ],
       { stdio: ["pipe", "pipe", "pipe"] },
     );
@@ -1410,19 +1427,39 @@ async function callClaudePSpotlight(prompt: string, schema: object): Promise<{
         return reject(new Error(`claude -p exited ${code}: ${stderr.slice(0, 800) || stdout.slice(0, 400)}`));
       }
       try {
-        // --output-format json envelope keys include: result, structured_output, usage, total_cost_usd.
-        // When --json-schema is set, the schema-conforming object lands in `structured_output`,
-        // and `result` is left empty. Fall back to parsing `result` for older claude versions.
+        // --output-format json envelope keys: result, structured_output, usage, total_cost_usd,
+        // num_turns, stop_reason, permission_denials. When --json-schema is set, the
+        // schema-conforming object lands in `structured_output`; `result` is the
+        // natural-language response (often empty when the schema is satisfied directly).
         const envelope = JSON.parse(stdout);
         let parsed: any = envelope.structured_output;
         if (!parsed) {
+          // Fallback: dig JSON out of result for older claude versions or when the model
+          // wrote prose instead of using the structured channel.
           const resultText = String(envelope.result ?? "");
           const firstBrace = resultText.indexOf("{");
           const lastBrace = resultText.lastIndexOf("}");
-          if (firstBrace < 0 || lastBrace <= firstBrace) {
-            throw new Error("No structured_output and no JSON object in result");
+          if (firstBrace >= 0 && lastBrace > firstBrace) {
+            try {
+              parsed = JSON.parse(resultText.slice(firstBrace, lastBrace + 1));
+            } catch { /* fall through to diagnostic */ }
           }
-          parsed = JSON.parse(resultText.slice(firstBrace, lastBrace + 1));
+        }
+        if (!parsed) {
+          // Surface what actually happened — agent loop turns, stop reason, permission
+          // denials — so the user can act on it instead of guessing.
+          const turns = envelope?.num_turns;
+          const stop = envelope?.stop_reason;
+          const denials = Array.isArray(envelope?.permission_denials) ? envelope.permission_denials.length : 0;
+          const cost = envelope?.total_cost_usd;
+          const resultPreview = String(envelope?.result ?? "").slice(0, 200);
+          throw new Error(
+            `claude -p returned no structured_output. ` +
+            `turns=${turns} stop=${stop} permission_denials=${denials} cost=$${cost}. ` +
+            `result preview: ${JSON.stringify(resultPreview)}. ` +
+            `This usually means the model entered an agent loop and never wrote the schema response — ` +
+            `set GEMINI_API_KEY to use Gemini structured output instead, which is faster and cheaper.`
+          );
         }
         resolve({
           parsed,
@@ -1462,6 +1499,12 @@ app.post("/api/spotlight", async (req, res) => {
 A normal summary covers the whole document evenly. A spotlight is different: it finds the most strategically useful, surprising, legally important, or reader-engaging part of the document and turns it into a faithful mini-story that makes the reader want to inspect the full source.
 
 Do not write marketing fluff. Do not withhold useful information like a teaser. Do not overclaim. Stay faithful to the source.
+
+IMPORTANT — SOURCE HANDLING:
+- The text under "SOURCE DOCUMENT" below IS the source. Treat it as the literal, complete material the user has provided.
+- You are NOT expected to fetch URLs, follow links, or retrieve anything. The Workbench performs no network access on your behalf.
+- If the source contains a URL, treat the URL string as part of the source text — it is content to analyze (e.g. what the URL points to in context, what its presence implies, what surrounding text says about it). Do NOT treat the URL as a fetch instruction that failed.
+- If the source is genuinely too short or too sparse to extract real hooks, say so plainly in the summary and faithfulnessCheck. Do not invent material to fill the schema.
 ${vaMode}
 TASKS:
 1. Write a generic faithful summary baseline.
