@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -8,7 +9,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3002;
 
 app.use(express.json());
 
@@ -997,6 +998,22 @@ ${activeCase.question}`;
   }
 });
 
+// RUN Single Benchmark route
+app.post("/api/run-single-pipeline", async (req, res) => {
+  const { caseId, pipeline, model } = req.body;
+  const modelName = model || "gemini-3.1-flash";
+
+  if (!caseId || !pipeline) {
+    return res.status(400).json({ error: "caseId and pipeline are required." });
+  }
+
+  const cases = loadTestCases();
+  const sources = loadSources();
+  const activeCase = cases.find((c: any) => c.id === caseId);
+  if (!activeCase) {
+    return res.status(404).json({ error: "Test case not found" });
+  }
+
   const startTime = Date.now();
   try {
     let result: any = null;
@@ -1246,6 +1263,270 @@ app.get("/api/report", (req, res) => {
     content = generateMarkdownReport(allRuns);
   }
   res.json({ report: content });
+});
+
+// Report which engine the spotlight endpoint will use, so the UI can show a badge.
+app.get("/api/spotlight-engine", (_req, res) => {
+  if (process.env.GEMINI_API_KEY) {
+    res.json({ engine: "gemini", model: process.env.GEMINI_MODEL || "gemini-3.1-flash", source: "GEMINI_API_KEY" });
+  } else {
+    res.json({ engine: "claude", model: "sonnet", source: "claude -p (OAuth)" });
+  }
+});
+
+// Spotlight Workbench shared JSON schema (used by both Gemini and claude -p fallback).
+const spotlightJsonSchema = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        coveredIssues: { type: "array", items: { type: "string" } },
+      },
+      required: ["text", "coveredIssues"],
+    },
+    hooks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          whyItMayMatter: { type: "string" },
+          sourceSupport: { type: "array", items: { type: "string" } },
+          scores: {
+            type: "object",
+            properties: {
+              strategicValue: { type: "integer" },
+              readerInterest: { type: "integer" },
+              sourceSupport: { type: "integer" },
+              legalUsefulness: { type: "integer" },
+              overclaimRisk: { type: "integer" },
+            },
+            required: ["strategicValue", "readerInterest", "sourceSupport", "legalUsefulness", "overclaimRisk"],
+          },
+        },
+        required: ["id", "title", "description", "whyItMayMatter", "sourceSupport", "scores"],
+      },
+    },
+    selectedHook: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        reasonSelected: { type: "string" },
+      },
+      required: ["id", "title", "reasonSelected"],
+    },
+    spotlight: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        spotlight: { type: "string" },
+        whyItMatters: { type: "string" },
+        sourceAnchors: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              claim: { type: "string" },
+              supportingText: { type: "string" },
+              location: { type: "string" },
+            },
+            required: ["claim", "supportingText", "location"],
+          },
+        },
+        whatNotToOverclaim: { type: "array", items: { type: "string" } },
+        nextBestQuestion: { type: "string" },
+      },
+      required: ["title", "spotlight", "whyItMatters", "sourceAnchors", "whatNotToOverclaim", "nextBestQuestion"],
+    },
+    faithfulnessCheck: {
+      type: "object",
+      properties: {
+        unsupportedClaims: { type: "array", items: { type: "string" } },
+        weakClaims: { type: "array", items: { type: "string" } },
+        missingSourceAnchors: { type: "array", items: { type: "string" } },
+        riskLevel: { type: "string" },
+        pass: { type: "boolean" },
+      },
+      required: ["unsupportedClaims", "weakClaims", "missingSourceAnchors", "riskLevel", "pass"],
+    },
+    comparison: {
+      type: "object",
+      properties: {
+        whySummaryIsDifferent: { type: "string" },
+        whySpotlightIsBetterForEngagement: { type: "string" },
+        failureModeToWatch: { type: "string" },
+      },
+      required: ["whySummaryIsDifferent", "whySpotlightIsBetterForEngagement", "failureModeToWatch"],
+    },
+  },
+  required: ["summary", "hooks", "selectedHook", "spotlight", "faithfulnessCheck", "comparison"],
+};
+
+// Run `claude -p` as a structured-JSON fallback when GEMINI_API_KEY isn't configured.
+// --bare strips hooks/auto-memory/CLAUDE.md auto-discovery so the call doesn't drag the
+// VM-wide ~$0.50 baseline; --json-schema constrains the model output to our shape.
+async function callClaudePSpotlight(prompt: string, schema: object): Promise<{
+  parsed: any;
+  usage: { input_tokens: number; output_tokens: number; cost_usd: number | null };
+}> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "claude",
+      [
+        "-p",
+        "--model", "sonnet",
+        "--output-format", "json",
+        "--json-schema", JSON.stringify(schema),
+        "--disable-slash-commands",
+        "--disallowedTools", "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate",
+      ],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
+
+    let stdout = "";
+    let stderr = "";
+    let killed = false;
+    const timer = setTimeout(() => {
+      killed = true;
+      child.kill("SIGTERM");
+    }, 240000); // 4 minute hard ceiling
+
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (killed) return reject(new Error("claude -p timed out after 4 minutes"));
+      if (code !== 0) {
+        return reject(new Error(`claude -p exited ${code}: ${stderr.slice(0, 800) || stdout.slice(0, 400)}`));
+      }
+      try {
+        // --output-format json envelope keys include: result, structured_output, usage, total_cost_usd.
+        // When --json-schema is set, the schema-conforming object lands in `structured_output`,
+        // and `result` is left empty. Fall back to parsing `result` for older claude versions.
+        const envelope = JSON.parse(stdout);
+        let parsed: any = envelope.structured_output;
+        if (!parsed) {
+          const resultText = String(envelope.result ?? "");
+          const firstBrace = resultText.indexOf("{");
+          const lastBrace = resultText.lastIndexOf("}");
+          if (firstBrace < 0 || lastBrace <= firstBrace) {
+            throw new Error("No structured_output and no JSON object in result");
+          }
+          parsed = JSON.parse(resultText.slice(firstBrace, lastBrace + 1));
+        }
+        resolve({
+          parsed,
+          usage: {
+            input_tokens: envelope?.usage?.input_tokens ?? 0,
+            output_tokens: envelope?.usage?.output_tokens ?? 0,
+            cost_usd: envelope?.total_cost_usd ?? null,
+          },
+        });
+      } catch (e: any) {
+        reject(new Error(`Failed to parse claude -p output: ${e.message}; raw head: ${stdout.slice(0, 400)}`));
+      }
+    });
+
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
+}
+
+// Spotlight Workbench — server-side Gemini call so we never expose API keys to the browser.
+// Falls back to `claude -p --model sonnet` when GEMINI_API_KEY is absent.
+app.post("/api/spotlight", async (req, res) => {
+  const { documentType, sourceText, model } = req.body || {};
+  if (!sourceText || String(sourceText).trim().length < 200) {
+    return res.status(400).json({ error: "sourceText must be at least 200 characters." });
+  }
+
+  const docType = String(documentType || "other");
+  const modelName = model || "gemini-3.1-flash";
+
+  const vaMode = docType === "va_decision"
+    ? `\nVA DECISION MODE:\nPrioritize hooks involving Board legal error, inadequate reasons or bases, duty to assist failure, inadequate VA medical opinion, favorable finding ignored or minimized, favorable evidence discounted, missing nexus bridge, effective-date issue, TDIU issue, secondary-service-connection theory, AMA lane decision point, or contradiction between findings and conclusion. Avoid saying the appeal will win. Identify possible development issues, reasons-or-bases problems, evidentiary gaps, or next-best review questions.\n`
+    : "";
+
+  const prompt = `You are running a Spotlight Workbench evaluation.
+
+A normal summary covers the whole document evenly. A spotlight is different: it finds the most strategically useful, surprising, legally important, or reader-engaging part of the document and turns it into a faithful mini-story that makes the reader want to inspect the full source.
+
+Do not write marketing fluff. Do not withhold useful information like a teaser. Do not overclaim. Stay faithful to the source.
+${vaMode}
+TASKS:
+1. Write a generic faithful summary baseline.
+2. Extract 3-7 candidate spotlight hooks.
+3. Score each hook from 1-5 for strategic value, reader interest, source support, legal usefulness if applicable, and overclaim risk.
+4. Select the best hook. Do not select a hook merely because it sounds dramatic. Prefer strong source support and practical value.
+5. Write the spotlight around the selected hook only.
+6. Extract source anchors that support the spotlight.
+7. Run a faithfulness check and flag unsupported claims, weak claims, missing anchors, and overconfident wording.
+8. Compare the generic summary to the spotlight.
+
+Return strict JSON matching the schema. Do not wrap in markdown.
+
+Document type: ${docType}
+
+SOURCE DOCUMENT:
+${sourceText}`;
+
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  const engine = hasGeminiKey ? "gemini" : "claude";
+  const engineModel = hasGeminiKey ? modelName : "sonnet";
+
+  try {
+    let parsed: any;
+    let usage: any;
+
+    if (hasGeminiKey) {
+      const response = await generateContentWithRetry({
+        model: modelName,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: spotlightJsonSchema as any,
+        },
+      });
+      parsed = JSON.parse(response.text || "{}");
+      usage = {
+        prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+        output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+      };
+    } else {
+      const out = await callClaudePSpotlight(prompt, spotlightJsonSchema);
+      parsed = out.parsed;
+      usage = {
+        prompt_tokens: out.usage.input_tokens,
+        output_tokens: out.usage.output_tokens,
+        cost_usd: out.usage.cost_usd,
+      };
+    }
+
+    const result = {
+      id: `spotlight_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      documentType: docType,
+      model: engineModel,
+      engine,
+      sourceLength: String(sourceText).length,
+      ...parsed,
+      _usage: usage,
+    };
+
+    res.json({ success: true, result });
+  } catch (err: any) {
+    console.error("Spotlight Workbench error", err);
+    res.status(500).json({ error: err.message || "Failed to generate spotlight run." });
+  }
 });
 
 

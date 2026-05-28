@@ -46,6 +46,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TestCase, SourceDocument, RunRecord, EvidenceCard, ScoreDetails } from "./types";
 import { motion, AnimatePresence } from "motion/react";
+import SpotlightWorkbench from "./SpotlightWorkbench";
 
 // Pre-Calculated Demo Runs to show state out of the box before API key is input
 const preCalculatedRuns: RunRecord[] = [
@@ -253,7 +254,7 @@ const preCalculatedRuns: RunRecord[] = [
 
 export default function App() {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report" | "spotlight">("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
@@ -637,9 +638,13 @@ export default function App() {
 
           {/* Action Hub Segmented Controls */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 max-w-max">
-            {(["dashboard", "files", "report"] as const).map((tab) => {
+            {(["dashboard", "files", "report", "spotlight"] as const).map((tab) => {
               const isActive = activeTab === tab;
-              const label = tab === "dashboard" ? "Harness Terminal" : tab === "files" ? "Workspace Corpus" : "Generated Report";
+              const label =
+                tab === "dashboard" ? "Harness Terminal"
+                : tab === "files" ? "Workspace Corpus"
+                : tab === "report" ? "Generated Report"
+                : "Spotlight Workbench";
               return (
                 <button
                   key={tab}
@@ -2483,6 +2488,11 @@ Output only the corrected, final legal analysis in clean markdown.`
               )}
             </div>
           </div>
+        )}
+
+        {/* TAB 4: SPOTLIGHT WORKBENCH */}
+        {activeTab === "spotlight" && (
+          <SpotlightWorkbench selectedModel={selectedModel} />
         )}
 
       </main>
