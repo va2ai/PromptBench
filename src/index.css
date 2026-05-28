@@ -1,16 +1,149 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "JetBrains Mono", source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-serif: "Instrument Serif", "Iowan Old Style", "Palatino", Georgia, serif;
+
+  /* Remap Tailwind's indigo palette in-place. The codebase reaches for indigo as its
+     "primary/accent" color across hundreds of classes; instead of editing each one,
+     we redirect indigo to a restrained ink/graphite ramp with a single deep-navy accent.
+     Result: every existing `bg-indigo-*` / `text-indigo-*` instantly reads as serious
+     rather than SaaS-purple, with no JSX churn. */
+  --color-indigo-50: #f6f5f1;
+  --color-indigo-100: #ecebe5;
+  --color-indigo-150: #e3e1da;
+  --color-indigo-200: #d6d3cc;
+  --color-indigo-300: #a8a29e;
+  --color-indigo-400: #57534e;
+  --color-indigo-500: #292524;
+  --color-indigo-600: #0c0a09;
+  --color-indigo-700: #0c0a09;
+  --color-indigo-800: #0c0a09;
+  --color-indigo-900: #000;
+  --color-indigo-950: #000;
+  --color-indigo-955: #000;
+
+  /* Soften slate to feel more like editorial paper, less Vercel-blueprint */
+  --color-slate-50: #fafaf7;
+  --color-slate-100: #f4f4f0;
+  --color-slate-200: #e7e5e0;
+  --color-slate-300: #d6d3cc;
+  --color-slate-400: #a8a29e;
+  --color-slate-500: #78716c;
+  --color-slate-600: #57534e;
+  --color-slate-700: #44403c;
+  --color-slate-800: #292524;
+  --color-slate-900: #1c1917;
+  --color-slate-950: #0c0a09;
+}
+
+/* Design tokens — a deliberate, restrained system.
+   Paper-warm neutrals (stone, not slate) + a single ink-blue accent.
+   These are referenced directly via CSS vars where Tailwind palettes feel too SaaS. */
+:root {
+  --paper: #fafaf7;          /* page bg — warm off-white, not slate */
+  --paper-2: #f4f4f0;        /* secondary surface */
+  --surface: #ffffff;        /* cards */
+  --rule: #e7e5e0;           /* hairline borders */
+  --rule-strong: #d6d3cc;
+  --ink: #0c0a09;            /* near-black, primary text */
+  --ink-soft: #44403c;       /* body */
+  --ink-mute: #78716c;       /* labels, captions */
+  --ink-faint: #a8a29e;
+  --accent: #1e40af;         /* one accent only — deep ink blue, used sparingly */
+  --accent-soft: #eef2ff;
+  --accent-rule: #c7d2fe;
+  --pos: #166534;            /* positive (terminal green, not pastel) */
+  --pos-soft: #f0fdf4;
+  --warn: #92400e;
+  --warn-soft: #fffbeb;
+  --neg: #991b1b;
+  --neg-soft: #fef2f2;
 }
 
 @layer base {
+  html {
+    background: var(--paper);
+  }
   body {
     font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11", "cv01";
+    color: var(--ink-soft);
+    background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  code, pre {
+  code, pre, .font-mono {
     font-family: var(--font-mono);
+    font-feature-settings: "ss01", "ss02", "zero";
   }
+  /* Subtle ruled-paper background — barely visible, adds editorial weight without noise */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(to bottom, transparent 0, transparent calc(1.5rem - 1px), rgba(12, 10, 9, 0.018) calc(1.5rem - 1px), rgba(12, 10, 9, 0.018) 1.5rem);
+    background-size: 100% 1.5rem;
+    z-index: 0;
+  }
+  /* Numbers get tabular figures so stats line up */
+  .tabular-nums, .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Tighten heading tracking for the editorial feel */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.018em;
+  }
+}
+
+/* Editorial italic accent — for the single subtitle phrase that gets a touch of personality */
+.serif-accent {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* A hairline section divider — replaces the puffy border-rounded card look in a few spots */
+.rule {
+  border-top: 1px solid var(--rule);
+}
+
+/* Tighter focus ring */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Disable the over-rounded "pillow" look globally where Tailwind's rounded-2xl is used.
+   Sharper corners read more pro/utilitarian. Cards keep just enough radius to feel modern. */
+.rounded-2xl { border-radius: 0.5rem !important; }
+.rounded-3xl { border-radius: 0.625rem !important; }
+.rounded-xl { border-radius: 0.4375rem !important; }
+
+/* Kill busy attention-grabbing micro-animations across the app. We keep AnimatePresence
+   for tab indicator transitions; we shut down the gratuitous "alive" pulsing dots,
+   bouncing icons, and ping rings that read as AI-demo theatrics. */
+.animate-pulse,
+.animate-ping,
+.animate-bounce {
+  animation: none !important;
+}
+
+/* Soften shadow usage — most cards in the app reach for shadow-sm/shadow-md/shadow-xs
+   which on a warm-paper bg reads as Material-y. A hairline border is more editorial. */
+.shadow-xs, .shadow-sm, .shadow-md {
+  box-shadow: none !important;
+}
+.shadow-inner {
+  box-shadow: inset 0 1px 0 rgba(12, 10, 9, 0.04) !important;
+}
+
+/* Subtle hover lift on key surfaces — replaces the previous bouncy scale animations */
+button, [role="button"] {
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }

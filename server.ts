@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import http from "http";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -1533,22 +1534,35 @@ ${sourceText}`;
 // Serve static Vite assets in dev, normal build folder in prod
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    // Share express's HTTP server with vite so HMR rides on the same port (3002) instead
+    // of vite's default WebSocket port (24678) — which isn't open in the GCP/UFW firewall
+    // when this is accessed via the VM's public IP.
+    const httpServer = http.createServer(app);
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // Share express's HTTP server with vite so the HMR WebSocket rides on the same
+        // port (3002) instead of vite's default 24678 (which isn't open in GCP/UFW
+        // firewalls when accessed via the VM's public IP). clientPort is what the
+        // browser-side client.js uses to construct the ws:// URL — must match.
+        hmr: { server: httpServer, clientPort: Number(process.env.PORT) || 3002 },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
+    httpServer.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server started running on port ${PORT}`);
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server started running on port ${PORT}`);
+    });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server started running on port ${PORT}`);
-  });
 }
 
 startServer();

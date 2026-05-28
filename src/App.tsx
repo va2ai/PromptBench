@@ -615,52 +615,57 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-800 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900">
-      {/* Upper Navigation & Branding Header */}
-      <header className="bg-white/85 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-100 flex items-center justify-center">
-              <Layers className="h-5.5 w-5.5 animate-pulse" id="app-logo-icon" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                Agent Grounding Comparison Harness
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-150">
-                  MVP Sandbox
-                </span>
-              </h1>
-              <p className="text-xs text-slate-500">
-                Benchmarking Single, Two-Agent, and Three-Agent (Audited & Repaired) architectures on legal accuracy, cost, and latency.
-              </p>
+    <div className="min-h-screen text-stone-800 font-sans antialiased selection:bg-stone-900 selection:text-stone-50" style={{ background: "var(--paper)" }}>
+      {/* Header — wordmark + meta + underline tabs. Restraint over decoration. */}
+      <header className="sticky top-0 z-50 backdrop-blur-sm" style={{ background: "rgba(250, 250, 247, 0.88)", borderBottom: "1px solid var(--rule)" }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-0">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 grid place-items-center h-7 w-7 border" style={{ borderColor: "var(--ink)", color: "var(--ink)" }}>
+                <span className="font-mono font-semibold text-[11px] leading-none tracking-tighter">A/G</span>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "var(--ink)" }}>
+                    Agent Grounding Harness
+                  </h1>
+                  <span className="text-[10px] font-mono uppercase tracking-[0.18em]" style={{ color: "var(--ink-mute)" }}>
+                    v0 · internal
+                  </span>
+                </div>
+                <p className="text-[12px] mt-0.5 max-w-2xl" style={{ color: "var(--ink-mute)" }}>
+                  Benchmarking single-, two-, and three-agent architectures on legal accuracy, cost, and latency —{" "}
+                  <span className="serif-accent" style={{ color: "var(--ink-soft)" }}>with receipts.</span>
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Action Hub Segmented Controls */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 max-w-max">
+          {/* Underline tabs — IDE / Stripe style */}
+          <div className="flex items-center gap-0 -mb-px overflow-x-auto">
             {(["dashboard", "files", "report", "spotlight"] as const).map((tab) => {
               const isActive = activeTab === tab;
               const label =
-                tab === "dashboard" ? "Harness Terminal"
-                : tab === "files" ? "Workspace Corpus"
-                : tab === "report" ? "Generated Report"
-                : "Spotlight Workbench";
+                tab === "dashboard" ? "Harness"
+                : tab === "files" ? "Corpus"
+                : tab === "report" ? "Report"
+                : "Spotlight";
               return (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                    isActive ? "text-slate-900" : "text-slate-600 hover:text-slate-900"
-                  }`}
+                  className="relative px-3.5 py-2.5 text-[12px] font-medium tracking-tight transition-colors cursor-pointer whitespace-nowrap"
+                  style={{ color: isActive ? "var(--ink)" : "var(--ink-mute)" }}
                 >
+                  {label}
                   {isActive && (
                     <motion.span
                       layoutId="activeHeaderTab"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 bg-white rounded-lg shadow-sm border border-slate-200/40"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      className="absolute left-0 right-0 -bottom-px h-0.5"
+                      style={{ background: "var(--ink)" }}
                     />
                   )}
-                  <span className="relative z-10">{label}</span>
                 </button>
               );
             })}
@@ -670,18 +675,21 @@ export default function App() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Quick Warning / API keys alert */}
+        {/* API key notice — flat, no animation theatrics */}
         <AnimatePresence>
           {apiKeyMissing && (
             <motion.div
-              initial={{ opacity: 0, y: -15 }}
+              initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="mb-6 p-4.5 bg-amber-50/70 backdrop-blur-xs rounded-2xl border border-amber-200 text-amber-900 flex items-start gap-3.5 shadow-sm shadow-amber-50/30"
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="mb-6 px-4 py-3 flex items-start gap-3"
+              style={{ background: "var(--warn-soft)", border: "1px solid #fde68a", color: "#78350f", borderRadius: 6 }}
             >
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5 animate-bounce" />
-              <div className="text-xs leading-relaxed">
-                <span className="font-bold text-amber-950">Gemini API Key missing:</span> The system could not detect a valid server-side <code className="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 font-mono text-[10px] border border-amber-200">GEMINI_API_KEY</code>. The harness is strictly using pre-compiled legal grounding results for representation. To run live LLM agents, specify the key in the <span className="font-semibold text-indigo-700">Settings &gt; Secrets</span> panel in Google AI Studio and reload.
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#a16207" }} />
+              <div className="text-[12px] leading-relaxed">
+                <span className="font-semibold uppercase tracking-wider text-[10px] mr-1.5" style={{ color: "#92400e" }}>Notice</span>
+                No server-side <code className="font-mono text-[11px] px-1 py-px" style={{ background: "#fde68a", color: "#78350f", borderRadius: 2 }}>GEMINI_API_KEY</code> detected. Showing pre-computed runs. Set the key in <span className="font-medium">Settings &gt; Secrets</span> and reload to run live agents.
               </div>
             </motion.div>
           )}
@@ -691,71 +699,38 @@ export default function App() {
         {activeTab === "dashboard" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* 1. Bento Grid Mini Stats */}
-            <div className="lg:col-span-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              
-              {/* Stat 1: Top performer */}
-              <motion.div 
-                whileHover={{ y: -3, scale: 1.01 }}
-                className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 transition-all hover:bg-slate-50/40 hover:border-slate-300"
-              >
-                <div className="p-3.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50 flex items-center justify-center">
-                  <Sparkles className="h-5 w-5" />
+            {/* Top stats — dense terminal row, hairline-divided, no icon pillows */}
+            <div className="lg:col-span-12 grid grid-cols-2 md:grid-cols-4 bg-white" style={{ border: "1px solid var(--rule)", borderRadius: 6 }}>
+              {[
+                { label: "Top Architecture", value: winner, mono: false, accent: true },
+                { label: "Three-Agent Score", value: `${statsArr.find(s => s.key === "three")?.score || 100}`, suffix: "/100" },
+                { label: "Latency · 3-Agent", value: `${statsArr.find(s => s.key === "three")?.latency || 4300}`, suffix: "ms", mono: true },
+                { label: "Cost · 3-Agent", value: `$${(statsArr.find(s => s.key === "three")?.cost || 0.00062).toFixed(5)}`, mono: true },
+              ].map((stat, i) => (
+                <div
+                  key={stat.label}
+                  className="px-5 py-4"
+                  style={{
+                    borderLeft: i === 0 ? "none" : "1px solid var(--rule)",
+                    borderTop: i >= 2 ? "1px solid var(--rule)" : undefined,
+                  }}
+                >
+                  <div className="text-[10px] font-medium uppercase tracking-[0.14em]" style={{ color: "var(--ink-mute)" }}>
+                    {stat.label}
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <span
+                      className={`text-[22px] leading-none ${stat.mono ? "font-mono font-medium" : "font-semibold"} tabular-nums`}
+                      style={{ color: stat.accent ? "var(--accent)" : "var(--ink)", letterSpacing: stat.mono ? "-0.02em" : "-0.025em" }}
+                    >
+                      {stat.value}
+                    </span>
+                    {stat.suffix && (
+                      <span className="text-xs font-mono" style={{ color: "var(--ink-faint)" }}>{stat.suffix}</span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Top Architecture</span>
-                  <span className="text-base font-bold text-slate-900 tracking-tight">{winner}</span>
-                </div>
-              </motion.div>
-
-              {/* Stat 2: Avg quality standard */}
-              <motion.div 
-                whileHover={{ y: -3, scale: 1.01 }}
-                className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 transition-all hover:bg-slate-50/40 hover:border-slate-300"
-              >
-                <div className="p-3.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100/40 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Three-Agent Score</span>
-                  <span className="text-base font-bold text-slate-900 tracking-tight">
-                    {statsArr.find(s => s.key === "three")?.score || 100} <span className="text-xs text-slate-400 font-normal">/ 100</span>
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Stat 3: Speed index */}
-              <motion.div 
-                whileHover={{ y: -3, scale: 1.01 }}
-                className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 transition-all hover:bg-slate-50/40 hover:border-slate-300"
-              >
-                <div className="p-3.5 rounded-xl bg-sky-50 text-sky-600 border border-sky-100/40 flex items-center justify-center">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Avg Latency (3-Agent)</span>
-                  <span className="text-base font-bold text-slate-900 tracking-tight">
-                    {statsArr.find(s => s.key === "three")?.latency || 4300} <span className="text-xs text-slate-400 font-normal font-sans">ms</span>
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Stat 4: Cost ratio */}
-              <motion.div 
-                whileHover={{ y: -3, scale: 1.01 }}
-                className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 transition-all hover:bg-slate-50/40 hover:border-slate-300"
-              >
-                <div className="p-3.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100/45 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Avg Cost (3-Agent)</span>
-                  <span className="text-base font-bold text-slate-900 font-mono tracking-tight">
-                    ${(statsArr.find(s => s.key === "three")?.cost || 0.00062).toFixed(5)}
-                  </span>
-                </div>
-              </motion.div>
-
+              ))}
             </div>
 
             {/* 2. Control Workshop Benchmarking Area */}
@@ -957,21 +932,24 @@ export default function App() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Practical Decision Guidance bar */}
-                <div className="mt-4 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-950">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1 bg-indigo-100 rounded-lg text-indigo-700">
-                      <Sliders className="h-4 w-4" />
-                    </div>
-                    <span>
-                      <strong className="font-extrabold text-indigo-900">Architectural Verdict:</strong> The <strong className="font-bold">Three-agent framework</strong> achieves perfect citation grounding, but increases latency by <strong className="font-bold">~3.8x</strong>.
+                {/* Verdict — quiet, editorial. Hairlines, no icon pill, mono label. */}
+                <div className="mt-5 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ borderTop: "1px solid var(--rule)" }}>
+                  <p className="text-[12px] leading-relaxed" style={{ color: "var(--ink-soft)" }}>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.16em] mr-2 px-1.5 py-0.5" style={{ background: "var(--paper-2)", color: "var(--ink-mute)", borderRadius: 2 }}>
+                      Verdict
                     </span>
-                  </div>
-                  <button 
+                    The <span style={{ color: "var(--ink)", fontWeight: 600 }}>three-agent framework</span> reaches perfect citation grounding,{" "}
+                    <span className="serif-accent">but at</span>{" "}
+                    <span className="font-mono tabular-nums" style={{ color: "var(--ink)" }}>~3.8×</span>{" "}
+                    the latency.
+                  </p>
+                  <button
                     onClick={() => setActiveTab("report")}
-                    className="shrink-0 flex items-center gap-1 font-bold text-indigo-700 hover:text-indigo-850 hover:underline transition-all text-[11px] cursor-pointer"
+                    className="shrink-0 flex items-center gap-1.5 text-[11px] font-medium tracking-tight cursor-pointer"
+                    style={{ color: "var(--ink)" }}
                   >
-                    Read Exec Summary <ArrowRight className="h-3 w-3" />
+                    <span style={{ borderBottom: "1px solid var(--ink)" }}>Read exec summary</span>
+                    <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
               </div>
