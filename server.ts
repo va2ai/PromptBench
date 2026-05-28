@@ -6,6 +6,17 @@ import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  buildIdf,
+  retrieve,
+  scoreSgi,
+  splitChunks,
+  DEFAULT_TOP_K,
+  SGI_BASELINE,
+  TAU,
+  TRUST_THRESHOLD,
+  REVIEW_THRESHOLD,
+} from "./src/groundlens/sgi";
 
 dotenv.config();
 
@@ -255,15 +266,62 @@ const defaultSources = [
   }
 ];
 
+// Groundlens seed: a real model-risk document plus a question set. The document
+// answers every question in GENERAL terms (so a calibrated, grounded answer
+// scores well) but deliberately omits specific figures, named validators, and
+// concrete scenarios — so a permissive prompt that fabricates those specifics
+// gets caught by the deterministic SGI scorer. This is the actual experiment.
+const defaultGroundlensDoc = {
+  document_title: "Argonaut Bank — LLM Anomaly Screening (AASS) v2.1",
+  document_text: `Argonaut Bank — LLM Anomaly Screening System (AASS), Model Risk Documentation, version 2.1.
+
+PURPOSE AND SCOPE
+The AASS is a large-language-model-assisted screening layer that reviews structured transaction records and free-text payment memos to surface candidate anomalies for human investigation. It does not block transactions on its own; it ranks records and routes the highest-risk items to an analyst queue. The system is a decision-support tool, not an automated decision system, and every flag is reviewed by a human investigator before any action is taken.
+
+INPUTS AND TRAINING-DATA COVERAGE
+The model was trained on a historical corpus of labeled transactions and analyst notes drawn from prior calendar years. In production it is exposed to several input categories that the training corpus does not fully represent. These include newly launched product types and payment rails that did not exist during the training window, transaction memos written in languages and code-switched mixtures that were sparse in the training data, and merchant categories that were re-coded after a taxonomy change. The documentation notes that inputs outside the training distribution are expected to produce lower-confidence scores and should be treated with additional caution by reviewers.
+
+DOCUMENTED FAILURE MODE
+The primary documented failure mode is confident misranking of out-of-distribution memos: when a memo uses unfamiliar phrasing, the model can assign a moderate-to-high anomaly score on the basis of surface novelty rather than genuine risk signal. This was characterized during validation as a precision failure concentrated in the upper-middle score band, where benign-but-unusual records are over-flagged. The failure was characterized through error analysis on a held-out sample and described qualitatively in the validation report; it is mitigated by routing, not eliminated.
+
+LIMITS OF THE SAFEGUARDS
+The safeguards — score calibration, human review of every flag, and a suppression list for known benign patterns — are designed around per-record review. The documentation acknowledges that they are not designed to catch coordinated activity that stays below per-record thresholds: a sequence of individually unremarkable transactions structured to remain just under the flagging band can pass without any single record being surfaced. This residual risk is documented as accepted and is monitored through separate aggregate-level controls outside the scope of the model.
+
+VALIDATION FOR ACCEPTANCE
+The system was validated for internal acceptance through backtesting against historically labeled anomalies and through review by the bank's internal model risk committee. Validation covered discrimination on the labeled sample, stability of scores across reruns, and a qualitative review of failure cases. The documentation states that acceptance was granted on the condition of mandatory human review and periodic revalidation; it does not record any external or third-party validation, and it does not cite a specific external regulatory standard as the basis for acceptance.
+
+DRIFT MONITORING SINCE DEPLOYMENT
+Since deployment, input drift is monitored using population-stability measures on the model's input features, computed on a recurring schedule. The documentation reports that some feature drift has been observed since go-live, consistent with the product and taxonomy changes noted above, and that the magnitude is under review by the monitoring team. No specific post-deployment drift magnitudes, dates, or performance deltas are recorded in this version of the document.`,
+  questions: [
+    { id: "Q1", question: "What inputs is the model exposed to that the training data did not cover?" },
+    { id: "Q2", question: "What is the documented failure mode and how was it characterized?" },
+    { id: "Q3", question: "What is the worst case the safeguards do not catch?" },
+    { id: "Q4", question: "How was the system validated for regulatory acceptance?" },
+    { id: "Q5", question: "What drift has been measured since deployment?" },
+  ],
+};
+
 // Seed defaults if empty
 const testCasesPath = path.join(dataDir, "test_cases.json");
 const sourcesPath = path.join(dataDir, "sources.json");
+const groundlensPath = path.join(dataDir, "groundlens.json");
 
 if (!fs.existsSync(testCasesPath)) {
   fs.writeFileSync(testCasesPath, JSON.stringify(defaultTestCases, null, 2));
 }
 if (!fs.existsSync(sourcesPath)) {
   fs.writeFileSync(sourcesPath, JSON.stringify(defaultSources, null, 2));
+}
+if (!fs.existsSync(groundlensPath)) {
+  fs.writeFileSync(groundlensPath, JSON.stringify(defaultGroundlensDoc, null, 2));
+}
+
+function loadGroundlensConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(groundlensPath, "utf-8"));
+  } catch (e) {
+    return defaultGroundlensDoc;
+  }
 }
 
 // Helper: load local files
@@ -1573,6 +1631,306 @@ ${sourceText}`;
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Groundlens — real A/B grounding test.
+//
+// One source document, two LLM *behaviors* over identical retrieved evidence:
+//   Run A "calibrated"  — strict grounding protocol, answer only from evidence.
+//   Run B "permissive"  — maximally helpful, fills gaps with confident specifics.
+// Each answer is scored by the deterministic geometric SGI (src/groundlens/sgi.ts)
+// — no LLM-as-judge — yielding a trust/review/flag verdict. The interesting
+// result is that the permissive behavior tends to fabricate specifics the
+// evidence doesn't support, which the geometry surfaces honestly.
+//
+// We run the SAME engine for both behaviors (Gemini if GEMINI_API_KEY is set,
+// else the claude -p fallback): the variable under test is the PROMPT, not the
+// model, so the comparison is apples-to-apples.
+// ---------------------------------------------------------------------------
+
+const GROUNDLENS_REGIMES = [
+  {
+    key: "calibrated",
+    label: "Calibrated",
+    promptLabel: "calibrated prompt",
+    system: `STRICT GROUNDING PROTOCOL.
+For each question, answer using ONLY the EVIDENCE provided for that question.
+Do NOT introduce facts, figures, names, standards, dates, or scenarios that are not explicitly present in that question's evidence.
+If the evidence does not contain the answer, say plainly that the provided evidence does not establish it.
+Keep each answer to 1-3 sentences and stay close to the wording of the evidence.`,
+  },
+  {
+    key: "permissive",
+    label: "Permissive",
+    promptLabel: "permissive prompt",
+    system: `You are a maximally helpful expert assistant.
+For each question, give the most complete, specific, and confident answer you can.
+Where the provided evidence is thin or general, use your domain knowledge to fill in concrete specifics — particular figures, named standards or frameworks, named third-party validators, and detailed scenarios — so the answer is as authoritative and useful as possible.
+Prefer a confident, detailed answer over hedging or saying that information is unavailable.`,
+  },
+] as const;
+
+const groundlensAnswerSchema = {
+  type: "object",
+  properties: {
+    answers: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { id: { type: "string" }, answer: { type: "string" } },
+        required: ["id", "answer"],
+      },
+    },
+  },
+  required: ["answers"],
+} as const;
+
+function buildGroundlensPrompt(
+  systemDirective: string,
+  items: { id: string; question: string; evidence: string[] }[],
+): string {
+  const blocks = items
+    .map((it) => {
+      const ev = it.evidence.length
+        ? it.evidence.map((e, i) => `  [E${i + 1}] ${e}`).join("\n")
+        : "  (no evidence retrieved)";
+      return `QUESTION ${it.id}: ${it.question}\nEVIDENCE for ${it.id}:\n${ev}`;
+    })
+    .join("\n\n");
+
+  return `${systemDirective}
+
+You will answer ${items.length} questions. Each question has its own EVIDENCE block retrieved from a single source document. Answer each question independently using its own evidence.
+
+${blocks}
+
+Return strict JSON matching the schema: an "answers" array with one object per question, each having "id" (matching the question id above) and "answer" (your answer text). Do not wrap in markdown.`;
+}
+
+// Generate answers for one behavior regime over all questions in a single call.
+async function generateGroundlensAnswers(
+  systemDirective: string,
+  items: { id: string; question: string; evidence: string[] }[],
+  hasGeminiKey: boolean,
+  modelName: string,
+): Promise<{ byId: Record<string, string>; usage: any }> {
+  const prompt = buildGroundlensPrompt(systemDirective, items);
+
+  let parsed: any;
+  let usage: any;
+
+  if (hasGeminiKey) {
+    const response = await generateContentWithRetry({
+      model: modelName,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            answers: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: { id: { type: Type.STRING }, answer: { type: Type.STRING } },
+                required: ["id", "answer"],
+              },
+            },
+          },
+          required: ["answers"],
+        } as any,
+      },
+    });
+    parsed = JSON.parse(response.text || "{}");
+    usage = {
+      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+      output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+    };
+  } else {
+    const out = await callClaudePSpotlight(prompt, groundlensAnswerSchema);
+    parsed = out.parsed;
+    usage = { prompt_tokens: out.usage.input_tokens, output_tokens: out.usage.output_tokens, cost_usd: out.usage.cost_usd };
+  }
+
+  const byId: Record<string, string> = {};
+  for (const a of parsed?.answers || []) {
+    if (a && typeof a.id === "string") byId[a.id] = String(a.answer ?? "");
+  }
+  return { byId, usage };
+}
+
+function groundlensNote(verdicts: Record<string, string>): { text: string; tone: string } | undefined {
+  const vals = Object.values(verdicts);
+  const allFlagged = vals.length > 0 && vals.every((v) => v === "flagged");
+  const cal = verdicts["calibrated"];
+  const perm = verdicts["permissive"];
+  if (allFlagged) {
+    return {
+      text: "Both runs flagged — the retrieved evidence does not support a grounded answer. Geometry surfaces the upstream retrieval gap honestly.",
+      tone: "neutral",
+    };
+  }
+  if (perm === "flagged" && (cal === "trusted" || cal === "review")) {
+    return {
+      text: "Permissive run introduced specifics the retrieved evidence does not support; the calibrated run stayed grounded.",
+      tone: "flagged",
+    };
+  }
+  if (perm === "review" && cal === "trusted") {
+    return { text: "Permissive run drifted beyond the evidence; calibrated run held the line.", tone: "review" };
+  }
+  return undefined;
+}
+
+// Report the engine /api/groundlens will use (mirrors /api/spotlight-engine).
+app.get("/api/groundlens-engine", (_req, res) => {
+  if (process.env.GEMINI_API_KEY) {
+    res.json({ engine: "gemini", model: process.env.GEMINI_MODEL || "gemini-3.1-flash", source: "GEMINI_API_KEY" });
+  } else {
+    res.json({ engine: "claude", model: "sonnet", source: "claude -p fallback" });
+  }
+});
+
+// Return the editable Groundlens document + question set.
+app.get("/api/groundlens-data", (_req, res) => {
+  res.json(loadGroundlensConfig());
+});
+
+// Persist edits to the Groundlens document / questions.
+app.post("/api/groundlens-data", (req, res) => {
+  try {
+    const { document_title, document_text, questions } = req.body || {};
+    if (!document_text || String(document_text).trim().length < 200) {
+      return res.status(400).json({ error: "document_text must be at least 200 characters." });
+    }
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: "questions must be a non-empty array." });
+    }
+    const cleaned = {
+      document_title: String(document_title || "Untitled Document"),
+      document_text: String(document_text),
+      questions: questions.map((q: any, i: number) => ({
+        id: String(q.id || `Q${i + 1}`),
+        question: String(q.question || ""),
+      })),
+    };
+    fs.writeFileSync(groundlensPath, JSON.stringify(cleaned, null, 2));
+    res.json({ success: true, ...cleaned });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to save Groundlens config." });
+  }
+});
+
+// Run the real A/B grounding test.
+app.post("/api/groundlens", async (req, res) => {
+  const cfg = loadGroundlensConfig();
+  const documentTitle = String(req.body?.document_title ?? cfg.document_title);
+  const documentText = String(req.body?.document_text ?? cfg.document_text);
+  const questions: { id: string; question: string }[] = Array.isArray(req.body?.questions)
+    ? req.body.questions
+    : cfg.questions;
+  const topK = Number(req.body?.topK) || DEFAULT_TOP_K;
+
+  if (!documentText || documentText.trim().length < 200) {
+    return res.status(400).json({ error: "document_text must be at least 200 characters." });
+  }
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return res.status(400).json({ error: "At least one question is required." });
+  }
+
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  const engine = hasGeminiKey ? "gemini" : "claude";
+  const modelName = hasGeminiKey ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+
+  try {
+    // 1. Deterministic TF-IDF retrieval (top-K chunks per question).
+    const chunks = splitChunks(documentText);
+    const idf = buildIdf(chunks);
+    const retrievalItems = questions.map((q) => {
+      const hits = retrieve(q.question, chunks, idf, topK);
+      return {
+        id: q.id,
+        question: q.question,
+        evidence: hits.map((h) => h.text),
+        hits,
+      };
+    });
+
+    // 2. Two LLM behaviors over identical evidence (same engine).
+    const usageByRegime: Record<string, any> = {};
+    const answersByRegime: Record<string, Record<string, string>> = {};
+    for (const regime of GROUNDLENS_REGIMES) {
+      const gen = await generateGroundlensAnswers(
+        regime.system,
+        retrievalItems.map((it) => ({ id: it.id, question: it.question, evidence: it.evidence })),
+        hasGeminiKey,
+        modelName,
+      );
+      answersByRegime[regime.key] = gen.byId;
+      usageByRegime[regime.key] = gen.usage;
+    }
+
+    // 3. Deterministic geometric SGI per (question, behavior) + verdict.
+    const summary: Record<string, { label: string; trusted: number; review: number; flagged: number }> = {};
+    for (const regime of GROUNDLENS_REGIMES) {
+      summary[regime.key] = { label: regime.label, trusted: 0, review: 0, flagged: 0 };
+    }
+
+    const questionResults = retrievalItems.map((it) => {
+      const verdicts: Record<string, string> = {};
+      const runs = GROUNDLENS_REGIMES.map((regime) => {
+        const answer = answersByRegime[regime.key]?.[it.id] ?? "";
+        const scored = scoreSgi(answer, it.evidence, idf);
+        verdicts[regime.key] = scored.verdict;
+        summary[regime.key][scored.verdict] += 1;
+        return {
+          regime: regime.key,
+          label: regime.label,
+          model: modelName,
+          answer,
+          sgi: Number(scored.sgi.toFixed(3)),
+          grounding: Number(scored.grounding.toFixed(3)),
+          verdict: scored.verdict,
+          sentenceSupport: scored.sentenceSupport.map((s) => ({
+            sentence: s.sentence,
+            support: Number(s.support.toFixed(3)),
+          })),
+        };
+      });
+      return {
+        id: it.id,
+        question: it.question,
+        evidence: it.hits.map((h) => ({ index: h.index, score: Number(h.score.toFixed(3)), text: h.text })),
+        runs,
+        note: groundlensNote(verdicts),
+      };
+    });
+
+    const result = {
+      id: `groundlens_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      engine,
+      model: modelName,
+      title: "groundlens",
+      subtitle: "model risk q&a · A/B test of two LLM behaviors",
+      date: new Date().toISOString().slice(0, 10),
+      document: documentTitle,
+      chunkCount: chunks.length,
+      topK,
+      scorer: { name: "SGI", tau: TAU, baseline: SGI_BASELINE, trustThreshold: TRUST_THRESHOLD, reviewThreshold: REVIEW_THRESHOLD },
+      runA: { ...GROUNDLENS_REGIMES[0], model: modelName },
+      runB: { ...GROUNDLENS_REGIMES[1], model: modelName },
+      questions: questionResults,
+      summary,
+      _usage: usageByRegime,
+    };
+
+    res.json({ success: true, result });
+  } catch (err: any) {
+    console.error("Groundlens run error", err);
+    res.status(500).json({ error: err.message || "Failed to run Groundlens test." });
+  }
+});
 
 // Serve static Vite assets in dev, normal build folder in prod
 async function startServer() {
