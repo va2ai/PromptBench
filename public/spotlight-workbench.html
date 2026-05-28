@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotlight Workbench MVP</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --panel-soft: #f1f5f9;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #4f46e5;
+      --accent-strong: #4338ca;
+      --good: #059669;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(79, 70, 229, 0.10), transparent 34rem),
+        radial-gradient(circle at top right, rgba(14, 165, 233, 0.10), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(16px);
+    }
+
+    .header-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 18px 22px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #4f46e5, #0f172a);
+      box-shadow: 0 12px 28px rgba(79, 70, 229, 0.26);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-weight: 900;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 390px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(226, 232, 240, 0.96);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-pad {
+      padding: 18px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border 0.16s, box-shadow 0.16s;
+    }
+
+    input, select {
+      padding: 10px 12px;
+    }
+
+    textarea {
+      min-height: 420px;
+      padding: 12px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(79, 70, 229, 0.75);
+      box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 13px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.12s, background 0.16s, border 0.16s;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .primary:hover:not(:disabled) {
+      background: var(--accent-strong);
+    }
+
+    .secondary {
+      background: white;
+      border: 1px solid var(--border);
+      color: #334155;
+    }
+
+    .secondary:hover:not(:disabled) {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .danger {
+      background: #fff1f2;
+      color: #be123c;
+      border: 1px solid #ffe4e6;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .tab {
+      white-space: nowrap;
+      background: transparent;
+      color: #64748b;
+      border: 1px solid transparent;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .tab.active {
+      background: #eef2ff;
+      color: #3730a3;
+      border-color: #c7d2fe;
+    }
+
+    .output {
+      padding: 18px;
+      min-height: 660px;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 520px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed #cbd5e1;
+      border-radius: var(--radius);
+      background: rgba(248, 250, 252, 0.68);
+      padding: 30px;
+    }
+
+    .empty strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 15px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .card h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .card p, .card li {
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .card ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    .hook-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .score-grid {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .score {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 9px;
+      text-align: center;
+    }
+
+    .score span {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      line-height: 1.15;
+      min-height: 23px;
+    }
+
+    .score strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 17px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      color: #475569;
+    }
+
+    .badge.good {
+      background: #ecfdf5;
+      color: #047857;
+      border-color: #a7f3d0;
+    }
+
+    .badge.warn {
+      background: #fffbeb;
+      color: #b45309;
+      border-color: #fde68a;
+    }
+
+    .badge.bad {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title h2 {
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .small {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 16px;
+      padding: 15px;
+      font-size: 12px;
+      line-height: 1.48;
+      overflow: auto;
+    }
+
+    .notice {
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+      border-radius: 14px;
+      padding: 11px 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 14px;
+    }
+
+    .history {
+      display: grid;
+      gap: 8px;
+      max-height: 260px;
+      overflow: auto;
+    }
+
+    .history button {
+      width: 100%;
+      text-align: left;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .error {
+      border: 1px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      border-radius: 14px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 12px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.48);
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      vertical-align: -2px;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 980px) {
+      .grid, .two-col {
+        grid-template-columns: 1fr;
+      }
+      textarea {
+        min-height: 300px;
+      }
+      .header-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div>
+          <h1>Spotlight Workbench</h1>
+          <p class="subtitle">PromptBench add-on for testing summary vs. spotlight generation, hooks, anchors, and overclaim risk.</p>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="secondary" id="copyPromptBtn">Copy Master Prompt</button>
+        <button class="secondary" id="exportBtn">Export JSON</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <aside class="panel panel-pad">
+        <div class="notice">
+          Browser API keys are acceptable for local MVP testing only. For production, route model calls through the existing Express server.
+        </div>
+
+        <div class="field">
+          <label for="apiKey">Gemini API Key</label>
+          <input id="apiKey" type="password" placeholder="Paste key for local testing" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="documentType">Document Type</label>
+          <select id="documentType">
+            <option value="va_decision">VA Decision</option>
+            <option value="legal_doc">Legal Document</option>
+            <option value="research_paper">Research Paper</option>
+            <option value="article">Article</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="sourceText">Source Document</label>
+          <textarea id="sourceText" placeholder="Paste a VA decision, article, research excerpt, or other source text..."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="generateBtn">Generate Spotlight Run</button>
+          <button class="secondary" id="sampleBtn">Load Sample</button>
+          <button class="danger" id="clearBtn">Clear</button>
+        </div>
+
+        <div id="errorBox" class="error" style="display:none;"></div>
+
+        <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:16px;">
+          <div class="section-title">
+            <h2>Local Runs</h2>
+            <span class="badge" id="runCount">0</span>
+          </div>
+          <div class="history" id="history"></div>
+        </div>
+      </aside>
+
+      <section class="panel">
+        <div class="tabs">
+          <button class="tab active" data-tab="comparison">Comparison</button>
+          <button class="tab" data-tab="hooks">Candidate Hooks</button>
+          <button class="tab" data-tab="spotlight">Spotlight</button>
+          <button class="tab" data-tab="anchors">Source Anchors</button>
+          <button class="tab" data-tab="qa">QA / Faithfulness</button>
+          <button class="tab" data-tab="raw">Raw JSON</button>
+        </div>
+        <div class="output" id="output">
+          <div class="empty">
+            <div>
+              <strong>No run yet.</strong>
+              Paste a document and generate a workbench run. The system will produce a generic summary, candidate hooks, selected hook, spotlight, source anchors, and faithfulness warnings.
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const els = {
+      apiKey: document.getElementById("apiKey"),
+      model: document.getElementById("model"),
+      documentType: document.getElementById("documentType"),
+      sourceText: document.getElementById("sourceText"),
+      generateBtn: document.getElementById("generateBtn"),
+      sampleBtn: document.getElementById("sampleBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      copyPromptBtn: document.getElementById("copyPromptBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      output: document.getElementById("output"),
+      errorBox: document.getElementById("errorBox"),
+      history: document.getElementById("history"),
+      runCount: document.getElementById("runCount")
+    };
+
+    const STORAGE_KEY = "spotlight_workbench_runs_v1";
+    let activeTab = "comparison";
+    let currentRun = null;
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function asList(items) {
+      if (!items || items.length === 0) return "<p class='muted small'>None.</p>";
+      return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+
+    function getRuns() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function saveRun(run) {
+      const runs = getRuns();
+      runs.unshift(run);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(runs.slice(0, 50)));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const runs = getRuns();
+      els.runCount.textContent = String(runs.length);
+      if (runs.length === 0) {
+        els.history.innerHTML = `<p class="muted small">No saved local runs.</p>`;
+        return;
+      }
+      els.history.innerHTML = runs.map((run, index) => {
+        const title = run?.spotlight?.title || run?.selectedHook?.title || "Untitled run";
+        const date = run?.createdAt ? new Date(run.createdAt).toLocaleString() : "unknown date";
+        const risk = run?.faithfulnessCheck?.riskLevel || "unknown";
+        return `<button data-run-index="${index}">${escapeHtml(title)}<br><span class="muted small">${escapeHtml(date)} · risk: ${escapeHtml(risk)}</span></button>`;
+      }).join("");
+    }
+
+    function showError(message) {
+      els.errorBox.style.display = "block";
+      els.errorBox.textContent = message;
+    }
+
+    function clearError() {
+      els.errorBox.style.display = "none";
+      els.errorBox.textContent = "";
+    }
+
+    function buildMasterPrompt(documentType, sourceText) {
+      const vaMode = documentType === "va_decision"
+        ? `\nVA DECISION MODE:\nPrioritize hooks involving Board legal error, inadequate reasons or bases, duty to assist failure, inadequate VA medical opinion, favorable finding ignored or minimized, favorable evidence discounted, missing nexus bridge, effective-date issue, TDIU issue, secondary-service-connection theory, AMA lane decision point, or contradiction between findings and conclusion. Avoid saying the appeal will win. Identify possible development issues, reasons-or-bases problems, evidentiary gaps, or next-best review questions.\n`
+        : "";
+
+      return `You are running a Spotlight Workbench evaluation.\n\nA normal summary covers the whole document evenly. A spotlight is different: it finds the most strategically useful, surprising, legally important, or reader-engaging part of the document and turns it into a faithful mini-story that makes the reader want to inspect the full source.\n\nDo not write marketing fluff. Do not withhold useful information like a teaser. Do not overclaim. Stay faithful to the source.\n${vaMode}\nTASKS:\n1. Write a generic faithful summary baseline.\n2. Extract 3-7 candidate spotlight hooks.\n3. Score each hook from 1-5 for strategic value, reader interest, source support, legal usefulness if applicable, and overclaim risk.\n4. Select the best hook. Do not select a hook merely because it sounds dramatic. Prefer strong source support and practical value.\n5. Write the spotlight around the selected hook only.\n6. Extract source anchors that support the spotlight.\n7. Run a faithfulness check and flag unsupported claims, weak claims, missing anchors, and overconfident wording.\n8. Compare the generic summary to the spotlight.\n\nReturn strict JSON only. Do not wrap it in markdown. Use this schema exactly:\n{\n  "summary": {\n    "text": "string",\n    "coveredIssues": ["string"]\n  },\n  "hooks": [\n    {\n      "id": "hook_1",\n      "title": "string",\n      "description": "string",\n      "whyItMayMatter": "string",\n      "sourceSupport": ["string"],\n      "scores": {\n        "strategicValue": 1,\n        "readerInterest": 1,\n        "sourceSupport": 1,\n        "legalUsefulness": 1,\n        "overclaimRisk": 1\n      }\n    }\n  ],\n  "selectedHook": {\n    "id": "hook_1",\n    "title": "string",\n    "reasonSelected": "string"\n  },\n  "spotlight": {\n    "title": "string",\n    "spotlight": "string",\n    "whyItMatters": "string",\n    "sourceAnchors": [\n      {\n        "claim": "string",\n        "supportingText": "string",\n        "location": "string"\n      }\n    ],\n    "whatNotToOverclaim": ["string"],\n    "nextBestQuestion": "string"\n  },\n  "faithfulnessCheck": {\n    "unsupportedClaims": ["string"],\n    "weakClaims": ["string"],\n    "missingSourceAnchors": ["string"],\n    "riskLevel": "low",\n    "pass": true\n  },\n  "comparison": {\n    "whySummaryIsDifferent": "string",\n    "whySpotlightIsBetterForEngagement": "string",\n    "failureModeToWatch": "string"\n  }\n}\n\nDocument type: ${documentType}\n\nSOURCE DOCUMENT:\n${sourceText}`;
+    }
+
+    function stripJson(text) {
+      const trimmed = String(text || "").trim();
+      if (trimmed.startsWith("```")) {
+        return trimmed.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+      }
+      const firstBrace = trimmed.indexOf("{");
+      const lastBrace = trimmed.lastIndexOf("}");
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        return trimmed.slice(firstBrace, lastBrace + 1);
+      }
+      return trimmed;
+    }
+
+    async function callGemini(apiKey, model, prompt) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini request failed (${response.status}): ${errorText.slice(0, 500)}`);
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+      if (!text) throw new Error("Gemini returned an empty response.");
+      return JSON.parse(stripJson(text));
+    }
+
+    function riskBadge(risk, pass) {
+      const clean = String(risk || "unknown").toLowerCase();
+      if (pass && clean === "low") return `<span class="badge good">Faithfulness: Low Risk</span>`;
+      if (clean === "high") return `<span class="badge bad">Faithfulness: High Risk</span>`;
+      return `<span class="badge warn">Faithfulness: ${escapeHtml(risk || "Review")}</span>`;
+    }
+
+    function renderComparison(run) {
+      return `<div class="section-title">
+        <h2>Summary vs. Spotlight</h2>
+        ${riskBadge(run?.faithfulnessCheck?.riskLevel, run?.faithfulnessCheck?.pass)}
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Generic Summary</h3>
+          <p>${escapeHtml(run?.summary?.text || "")}</p>
+          <h3 style="margin-top:14px;">Covered Issues</h3>
+          ${asList(run?.summary?.coveredIssues)}
+        </div>
+        <div class="card">
+          <h3>${escapeHtml(run?.spotlight?.title || "Spotlight")}</h3>
+          <p>${escapeHtml(run?.spotlight?.spotlight || "")}</p>
+          <h3 style="margin-top:14px;">Why This Matters</h3>
+          <p>${escapeHtml(run?.spotlight?.whyItMatters || "")}</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>Workbench Comparison</h3>
+        <p><strong>Why the summary is different:</strong> ${escapeHtml(run?.comparison?.whySummaryIsDifferent || "")}</p>
+        <p style="margin-top:8px;"><strong>Why the spotlight is better for engagement:</strong> ${escapeHtml(run?.comparison?.whySpotlightIsBetterForEngagement || "")}</p>
+        <p style="margin-top:8px;"><strong>Failure mode to watch:</strong> ${escapeHtml(run?.comparison?.failureModeToWatch || "")}</p>
+      </div>`;
+    }
+
+    function renderHooks(run) {
+      const hooks = run?.hooks || [];
+      if (hooks.length === 0) return `<div class="empty"><strong>No hooks returned.</strong></div>`;
+      return `<div class="section-title"><h2>Candidate Hooks</h2><span class="badge">${hooks.length} hooks</span></div>
+        <div class="hook-list">
+          ${hooks.map((hook) => `<div class="card">
+            <h3>${escapeHtml(hook.title)} ${hook.id === run?.selectedHook?.id ? `<span class="badge good">Selected</span>` : ""}</h3>
+            <p>${escapeHtml(hook.description)}</p>
+            <p style="margin-top:8px;"><strong>Why it may matter:</strong> ${escapeHtml(hook.whyItMayMatter)}</p>
+            <div class="score-grid">
+              <div class="score"><span>Strategic</span><strong>${escapeHtml(hook?.scores?.strategicValue ?? "-")}</strong></div>
+              <div class="score"><span>Interest</span><strong>${escapeHtml(hook?.scores?.readerInterest ?? "-")}</strong></div>
+              <div class="score"><span>Support</span><strong>${escapeHtml(hook?.scores?.sourceSupport ?? "-")}</strong></div>
+              <div class="score"><span>Legal Use</span><strong>${escapeHtml(hook?.scores?.legalUsefulness ?? "-")}</strong></div>
+              <div class="score"><span>Overclaim Risk</span><strong>${escapeHtml(hook?.scores?.overclaimRisk ?? "-")}</strong></div>
+            </div>
+            <h3 style="margin-top:12px;">Source Support</h3>
+            ${asList(hook.sourceSupport)}
+          </div>`).join("")}
+        </div>`;
+    }
+
+    function renderSpotlight(run) {
+      return `<div class="section-title"><h2>Final Spotlight</h2>${riskBadge(run?.faithfulnessCheck?.riskLevel, run?.faithfulnessCheck?.pass)}</div>
+      <div class="card">
+        <h3>${escapeHtml(run?.spotlight?.title || "Untitled Spotlight")}</h3>
+        <p>${escapeHtml(run?.spotlight?.spotlight || "")}</p>
+      </div>
+      <div class="two-col" style="margin-top:14px;">
+        <div class="card">
+          <h3>Why This Matters</h3>
+          <p>${escapeHtml(run?.spotlight?.whyItMatters || "")}</p>
+        </div>
+        <div class="card">
+          <h3>Next Best Question</h3>
+          <p>${escapeHtml(run?.spotlight?.nextBestQuestion || "")}</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>What Not To Overclaim</h3>
+        ${asList(run?.spotlight?.whatNotToOverclaim)}
+      </div>`;
+    }
+
+    function renderAnchors(run) {
+      const anchors = run?.spotlight?.sourceAnchors || [];
+      return `<div class="section-title"><h2>Source Anchors</h2><span class="badge">${anchors.length} anchors</span></div>
+      <div class="hook-list">
+        ${anchors.length ? anchors.map((anchor) => `<div class="card">
+          <h3>${escapeHtml(anchor.claim || "Claim")}</h3>
+          <p>${escapeHtml(anchor.supportingText || "")}</p>
+          <p style="margin-top:8px;" class="muted small"><strong>Location:</strong> ${escapeHtml(anchor.location || "Not specified")}</p>
+        </div>`).join("") : `<div class="empty"><strong>No source anchors returned.</strong></div>`}
+      </div>`;
+    }
+
+    function renderQA(run) {
+      const qa = run?.faithfulnessCheck || {};
+      return `<div class="section-title"><h2>QA / Faithfulness</h2>${riskBadge(qa.riskLevel, qa.pass)}</div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Unsupported Claims</h3>
+          ${asList(qa.unsupportedClaims)}
+        </div>
+        <div class="card">
+          <h3>Weak Claims</h3>
+          ${asList(qa.weakClaims)}
+        </div>
+        <div class="card">
+          <h3>Missing Source Anchors</h3>
+          ${asList(qa.missingSourceAnchors)}
+        </div>
+        <div class="card">
+          <h3>Status</h3>
+          <p><strong>Pass:</strong> ${qa.pass ? "Yes" : "No"}</p>
+          <p><strong>Risk level:</strong> ${escapeHtml(qa.riskLevel || "unknown")}</p>
+        </div>
+      </div>`;
+    }
+
+    function renderRaw(run) {
+      return `<div class="section-title"><h2>Raw JSON</h2><span class="badge">Export-ready</span></div><pre>${escapeHtml(JSON.stringify(run, null, 2))}</pre>`;
+    }
+
+    function renderOutput() {
+      if (!currentRun) {
+        els.output.innerHTML = `<div class="empty"><div><strong>No run selected.</strong>Generate or load a local run.</div></div>`;
+        return;
+      }
+
+      const renderers = {
+        comparison: renderComparison,
+        hooks: renderHooks,
+        spotlight: renderSpotlight,
+        anchors: renderAnchors,
+        qa: renderQA,
+        raw: renderRaw
+      };
+      els.output.innerHTML = renderers[activeTab](currentRun);
+    }
+
+    async function generateRun() {
+      clearError();
+      const apiKey = els.apiKey.value.trim();
+      const sourceText = els.sourceText.value.trim();
+      const documentType = els.documentType.value;
+      const model = els.model.value;
+
+      if (!apiKey) {
+        showError("Paste a Gemini API key for local MVP testing, or use Copy Master Prompt and run it elsewhere.");
+        return;
+      }
+      if (sourceText.length < 200) {
+        showError("Paste a longer source document. The workbench needs enough text to identify hooks and anchors.");
+        return;
+      }
+
+      const prompt = buildMasterPrompt(documentType, sourceText);
+      els.generateBtn.disabled = true;
+      els.generateBtn.innerHTML = `<span class="loading"></span>Generating...`;
+
+      try {
+        const result = await callGemini(apiKey, model, prompt);
+        const run = {
+          id: `spotlight_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          documentType,
+          model,
+          sourceLength: sourceText.length,
+          ...result
+        };
+        currentRun = run;
+        saveRun(run);
+        activeTab = "comparison";
+        document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === activeTab));
+        renderOutput();
+      } catch (error) {
+        showError(error.message || String(error));
+      } finally {
+        els.generateBtn.disabled = false;
+        els.generateBtn.textContent = "Generate Spotlight Run";
+      }
+    }
+
+    function loadSample() {
+      els.documentType.value = "va_decision";
+      els.sourceText.value = `Citation Nr: 0000000\nDecision Date: 05/27/2026\n\nISSUE\nEntitlement to service connection for obstructive sleep apnea, including as secondary to service-connected PTSD.\n\nFINDINGS\nThe Veteran has a current diagnosis of obstructive sleep apnea confirmed by a sleep study. Service treatment records do not contain a formal diagnosis of sleep apnea. The Veteran submitted lay statements from a spouse and fellow servicemember describing loud snoring, pauses in breathing, and daytime fatigue during service. The Veteran is service connected for PTSD. A private article submitted by the Veteran discusses association between PTSD symptoms, sleep disruption, weight gain, and obstructive sleep apnea, but no clinician applied that literature to the Veteran's facts.\n\nREASONS AND BASES\nThe Board acknowledges the Veteran's current diagnosis and lay evidence of sleep symptoms. The Board also acknowledges the Veteran's theory that PTSD contributed to weight gain and worsened sleep apnea. However, the Board finds the evidence does not establish a nexus between the current sleep apnea and active service or a service-connected disability. The Board assigns limited probative weight to the medical article because it is general in nature and does not address the Veteran's specific medical history. The Board finds the lay witnesses competent to describe observable symptoms but not competent to diagnose sleep apnea or provide a medical nexus opinion.\n\nThe record does not contain a VA medical opinion addressing whether the Veteran's PTSD caused or aggravated sleep apnea, including through weight gain as an intermediate step. The Board concludes that the duty to assist does not require an examination because the evidence does not show an in-service diagnosis or competent nexus evidence.\n\nCONCLUSION\nService connection for obstructive sleep apnea, including as secondary to PTSD, is denied.`;
+    }
+
+    function exportJson() {
+      if (!currentRun) {
+        showError("No run available to export.");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(currentRun, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${currentRun.id || "spotlight-run"}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyPrompt() {
+      const prompt = buildMasterPrompt(els.documentType.value, els.sourceText.value.trim() || "[PASTE SOURCE DOCUMENT HERE]");
+      await navigator.clipboard.writeText(prompt);
+      els.copyPromptBtn.textContent = "Copied";
+      setTimeout(() => els.copyPromptBtn.textContent = "Copy Master Prompt", 1200);
+    }
+
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeTab = button.dataset.tab;
+        document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));
+        button.classList.add("active");
+        renderOutput();
+      });
+    });
+
+    els.generateBtn.addEventListener("click", generateRun);
+    els.sampleBtn.addEventListener("click", loadSample);
+    els.clearBtn.addEventListener("click", () => {
+      els.sourceText.value = "";
+      clearError();
+    });
+    els.exportBtn.addEventListener("click", exportJson);
+    els.copyPromptBtn.addEventListener("click", copyPrompt);
+    els.history.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-run-index]");
+      if (!button) return;
+      const run = getRuns()[Number(button.dataset.runIndex)];
+      if (run) {
+        currentRun = run;
+        renderOutput();
+      }
+    });
+
+    renderHistory();
+  </script>
+</body>
+</html>
