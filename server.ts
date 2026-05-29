@@ -53,6 +53,15 @@ function isGeminiAvailable(): boolean {
   return useVertex || !!process.env.GEMINI_API_KEY;
 }
 
+export type Provider = "gemini" | "claude";
+
+// Resolve the effective provider for a request. Explicit choice wins; when omitted
+// we preserve the historical default: Gemini if a live backend is configured, else claude -p.
+function resolveProvider(requested?: unknown): Provider {
+  if (requested === "gemini" || requested === "claude") return requested;
+  return isGeminiAvailable() ? "gemini" : "claude";
+}
+
 function getGeminiClient(): GoogleGenAI {
   if (!isGeminiAvailable()) {
     throw new Error("GEMINI_API_KEY is missing. Please configuration your key in the Secrets Panel.");
@@ -1535,6 +1544,56 @@ const spotlightJsonSchema = {
   },
   required: ["summary", "hooks", "selectedHook", "spotlight", "faithfulnessCheck", "comparison"],
 };
+
+// Convert a plain JSON Schema (the single source of truth at each call site) into the
+// @google/genai responseSchema form. Lets one schema feed both the Gemini path and the
+// claude -p path (which consumes plain JSON Schema directly).
+function toGeminiSchema(s: any): any {
+  const typeMap: Record<string, any> = {
+    object: Type.OBJECT,
+    string: Type.STRING,
+    array: Type.ARRAY,
+    number: Type.NUMBER,
+    integer: Type.INTEGER,
+    boolean: Type.BOOLEAN,
+  };
+  const out: any = { type: typeMap[s.type] ?? Type.STRING };
+  if (s.description) out.description = s.description;
+  if (s.properties) {
+    out.properties = {};
+    for (const [k, v] of Object.entries(s.properties)) out.properties[k] = toGeminiSchema(v);
+  }
+  if (s.required) out.required = s.required;
+  if (s.items) out.items = toGeminiSchema(s.items);
+  return out;
+}
+
+// Single entry point for one structured LLM call. Routes to Gemini or claude -p by provider
+// and returns a uniform shape so every call site is provider-agnostic.
+async function generateStructured(opts: {
+  provider: Provider;
+  model: string;
+  prompt: string;
+  schema: any; // plain JSON Schema
+}): Promise<{ data: any; prompt_tokens: number; output_tokens: number }> {
+  if (opts.provider === "claude") {
+    const { parsed, usage } = await callClaudePSpotlight(opts.prompt, opts.schema);
+    return { data: parsed, prompt_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
+  }
+  // Gemini path. getGeminiClient() throws the existing "GEMINI_API_KEY is missing" error
+  // when no backend is configured, preserving the current key-missing UX.
+  getGeminiClient();
+  const response = await generateContentWithRetry({
+    model: opts.model,
+    contents: opts.prompt,
+    config: { responseMimeType: "application/json", responseSchema: toGeminiSchema(opts.schema) },
+  });
+  return {
+    data: JSON.parse(response.text || "{}"),
+    prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+    output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+  };
+}
 
 // Run `claude -p` as a structured-JSON fallback when GEMINI_API_KEY isn't configured.
 // --bare strips hooks/auto-memory/CLAUDE.md auto-discovery so the call doesn't drag the
