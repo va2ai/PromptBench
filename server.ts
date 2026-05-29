@@ -1400,6 +1400,20 @@ app.get("/api/report", (req, res) => {
   res.json({ report: content });
 });
 
+// Report provider availability so the UI can enable/annotate the toggle.
+app.get("/api/providers", (_req, res) => {
+  const geminiSource = useVertex
+    ? `Vertex AI (ADC: ${vertexProject}/${vertexLocation})`
+    : process.env.GEMINI_API_KEY
+      ? "GEMINI_API_KEY"
+      : null;
+  res.json({
+    default: isGeminiAvailable() ? "gemini" : "claude",
+    gemini: { available: isGeminiAvailable(), source: geminiSource },
+    claude: { available: true, source: "claude -p (OAuth)" },
+  });
+});
+
 // Report which engine the spotlight endpoint will use, so the UI can show a badge.
 app.get("/api/spotlight-engine", (_req, res) => {
   if (useVertex) {
@@ -1672,7 +1686,7 @@ CRITICAL RUNTIME CONSTRAINTS:
 // Spotlight Workbench — server-side Gemini call so we never expose API keys to the browser.
 // Falls back to `claude -p --model sonnet` when GEMINI_API_KEY is absent.
 app.post("/api/spotlight", async (req, res) => {
-  const { documentType, sourceText, model } = req.body || {};
+  const { documentType, sourceText, model, provider } = req.body || {};
   if (!sourceText || String(sourceText).trim().length < 200) {
     return res.status(400).json({ error: "sourceText must be at least 200 characters." });
   }
@@ -1713,37 +1727,18 @@ Document type: ${docType}
 SOURCE DOCUMENT:
 ${sourceText}`;
 
-  const hasGeminiKey = isGeminiAvailable();
-  const engine = hasGeminiKey ? "gemini" : "claude";
-  const engineModel = hasGeminiKey ? modelName : "sonnet";
+  const chosenProvider = resolveProvider(provider);
+  const engine = chosenProvider;
+  const engineModel = chosenProvider === "gemini" ? modelName : "sonnet";
 
   try {
-    let parsed: any;
-    let usage: any;
-
-    if (hasGeminiKey) {
-      const response = await generateContentWithRetry({
-        model: modelName,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: spotlightJsonSchema as any,
-        },
-      });
-      parsed = JSON.parse(response.text || "{}");
-      usage = {
-        prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-        output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-      };
-    } else {
-      const out = await callClaudePSpotlight(prompt, spotlightJsonSchema);
-      parsed = out.parsed;
-      usage = {
-        prompt_tokens: out.usage.input_tokens,
-        output_tokens: out.usage.output_tokens,
-        cost_usd: out.usage.cost_usd,
-      };
-    }
+    const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
+      provider: chosenProvider,
+      model: modelName,
+      prompt,
+      schema: spotlightJsonSchema,
+    });
+    const usage = { prompt_tokens, output_tokens };
 
     const result = {
       id: `spotlight_${Date.now()}`,
@@ -1843,46 +1838,18 @@ Return strict JSON matching the schema: an "answers" array with one object per q
 async function generateGroundlensAnswers(
   systemDirective: string,
   items: { id: string; question: string; evidence: string[] }[],
-  hasGeminiKey: boolean,
+  provider: Provider,
   modelName: string,
 ): Promise<{ byId: Record<string, string>; usage: any }> {
   const prompt = buildGroundlensPrompt(systemDirective, items);
 
-  let parsed: any;
-  let usage: any;
-
-  if (hasGeminiKey) {
-    const response = await generateContentWithRetry({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            answers: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: { id: { type: Type.STRING }, answer: { type: Type.STRING } },
-                required: ["id", "answer"],
-              },
-            },
-          },
-          required: ["answers"],
-        } as any,
-      },
-    });
-    parsed = JSON.parse(response.text || "{}");
-    usage = {
-      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-      output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-    };
-  } else {
-    const out = await callClaudePSpotlight(prompt, groundlensAnswerSchema);
-    parsed = out.parsed;
-    usage = { prompt_tokens: out.usage.input_tokens, output_tokens: out.usage.output_tokens, cost_usd: out.usage.cost_usd };
-  }
+  const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
+    provider,
+    model: modelName,
+    prompt,
+    schema: groundlensAnswerSchema,
+  });
+  const usage = { prompt_tokens, output_tokens };
 
   const byId: Record<string, string> = {};
   for (const a of parsed?.answers || []) {
@@ -1967,46 +1934,18 @@ DOCUMENT TITLE: ${documentTitle || "(untitled)"}
 SOURCE DOCUMENT:
 ${documentText}`;
 
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
-  const engine = hasGeminiKey ? "gemini" : "claude";
-  const modelName = hasGeminiKey ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+  const chosenProvider = resolveProvider(req.body?.provider);
+  const engine = chosenProvider;
+  const modelName = chosenProvider === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
 
   try {
-    let parsed: any;
-    let usage: any;
-
-    if (hasGeminiKey) {
-      const response = await generateContentWithRetry({
-        model: modelName,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: { id: { type: Type.STRING }, question: { type: Type.STRING } },
-                  required: ["id", "question"],
-                },
-              },
-            },
-            required: ["questions"],
-          } as any,
-        },
-      });
-      parsed = JSON.parse(response.text || "{}");
-      usage = {
-        prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-        output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-      };
-    } else {
-      const out = await callClaudePSpotlight(prompt, groundlensQuestionGenSchema);
-      parsed = out.parsed;
-      usage = { prompt_tokens: out.usage.input_tokens, output_tokens: out.usage.output_tokens, cost_usd: out.usage.cost_usd };
-    }
+    const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
+      provider: chosenProvider,
+      model: modelName,
+      prompt,
+      schema: groundlensQuestionGenSchema,
+    });
+    const usage = { prompt_tokens, output_tokens };
 
     const rawList: any[] = Array.isArray(parsed?.questions) ? parsed.questions : [];
     const questions = rawList
@@ -2075,9 +2014,9 @@ app.post("/api/groundlens", async (req, res) => {
     return res.status(400).json({ error: "At least one question is required." });
   }
 
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
-  const engine = hasGeminiKey ? "gemini" : "claude";
-  const modelName = hasGeminiKey ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+  const chosenProvider = resolveProvider(req.body?.provider);
+  const engine = chosenProvider;
+  const modelName = chosenProvider === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
 
   try {
     // 1. Deterministic TF-IDF retrieval (top-K chunks per question).
@@ -2100,7 +2039,7 @@ app.post("/api/groundlens", async (req, res) => {
       const gen = await generateGroundlensAnswers(
         regime.system,
         retrievalItems.map((it) => ({ id: it.id, question: it.question, evidence: it.evidence })),
-        hasGeminiKey,
+        chosenProvider,
         modelName,
       );
       answersByRegime[regime.key] = gen.byId;
