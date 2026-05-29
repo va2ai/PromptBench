@@ -53,7 +53,7 @@ The three pipelines and their evaluation live as inline functions in `server.ts`
 
 `POST /api/spotlight` chooses its LLM at request time:
 
-- **Gemini path** (preferred): if `process.env.GEMINI_API_KEY` is set, uses `@google/genai` with `responseSchema` for structured output. Fast, cheap.
+- **Gemini path** (preferred): a live Gemini backend is used whenever `hasGeminiBackend()` is true, which means **either** `GOOGLE_GENAI_USE_VERTEXAI=true` (Vertex AI via gcloud Application Default Credentials — no API key needed) **or** `process.env.GEMINI_API_KEY` is set (raw Developer API key). Both speak the same `@google/genai` client with `responseSchema` for structured output; the only difference is how the `GoogleGenAI` client is constructed near the top of `server.ts` (`useVertex` branch → `{vertexai:true, project, location}`, defaulting to `vaclaims-194006`/`us-central1`). Fast, cheap. `GET /api/spotlight-engine` / `/api/groundlens-engine` report which path is live.
 - **`claude -p` fallback**: spawned subprocess with `--output-format json --json-schema <schema> --append-system-prompt <single-shot directive> --disallowedTools <broad list>`. The single-shot directive and the wide disallow list are **load-bearing** — without them Claude Code's default system prompt treats the call as an interactive coding session, burns ~10 turns getting tool-denied, and returns an empty `result` with no `structured_output`. If you edit `callClaudePSpotlight`, do not remove either.
 - The fallback also costs ~$0.15–0.50 per call (OAuth claude -p baseline + cache creation), so it's a "demo without setup" mode, not a production path. The error message thrown when `structured_output` is missing intentionally tells the caller to set `GEMINI_API_KEY`.
 
@@ -63,13 +63,13 @@ The spotlight prompt explicitly states that **the Workbench performs no network 
 
 `POST /api/groundlens` is a **real** end-to-end test, not a canned view. Over one source document (`data/groundlens.json`) it: (1) does deterministic **TF-IDF top-K retrieval** per question, (2) runs the **same engine twice** with two prompt regimes — `calibrated` (strict grounding) vs `permissive` (fills gaps with confident specifics) — over identical evidence, then (3) scores each answer with the **SGI**.
 
-- The variable under test is the **prompt/behavior, not the model** — both runs use the same engine (Gemini or `claude -p`), so it's apples-to-apples. It reuses the same dual-engine path and the load-bearing `callClaudePSpotlight` fallback as Spotlight (one LLM call per regime answers all questions via a structured schema).
+- The variable under test is the **prompt/behavior, not the model** — both runs use the same engine (Gemini — Vertex or API key — or the `claude -p` fallback), so it's apples-to-apples. It reuses the same dual-engine path and the load-bearing `callClaudePSpotlight` fallback as Spotlight (one LLM call per regime answers all questions via a structured schema).
 - **`src/groundlens/sgi.ts`** is the canonical scorer: pure, deterministic, no LLM-as-judge. SGI = IDF-weighted token coverage of the answer against its retrieved evidence, aggregated with a **geometric mean** (so one fabricated claim tanks the score), normalized by `TAU` (the grounding fraction that defines SGI = 1.0). Verdicts: SGI ≥ 1.0 trusted, ≥ 0.85 review, else flagged. Fabricated specifics (invented numbers/validators/standards) carry max IDF and are never in evidence → they drag SGI down. If you change `TAU` or the thresholds, the demo report in `GroundlensMetrics.tsx` (`DEMO_REPORT`) is illustrative only and won't recompute.
 - The seed `data/groundlens.json` document answers every question in *general* terms but deliberately omits specific figures/validators/scenarios, so the permissive regime's fabrications are what the geometry catches.
 
 ### Frontend
 
-- `src/App.tsx` (~2500 lines) is the single top-level component with five tabs: **Harness** (live benchmark), **Corpus** (edit cases/sources), **Report** (comparison_report.md), **Spotlight** (renders `SpotlightWorkbench.tsx`), **Groundlens** (renders `GroundlensMetrics.tsx`).
+- `src/App.tsx` (~3000 lines) is the single top-level component. There are **three top-level tabs** (`TOP_TABS`): **Harness**, **Spotlight** (renders `SpotlightWorkbench.tsx`), **Groundlens** (renders `GroundlensMetrics.tsx`). Harness is itself a group (`HARNESS_GROUP` / `HARNESS_SUBTABS`) with three **subtabs**: **Benchmark** (live benchmark, internal id `"dashboard"`), **Corpus** (`"files"`, edit cases/sources), **Report** (comparison_report.md). The `TabId` union is the flat set `"dashboard" | "files" | "report" | "spotlight" | "groundlens"`; entering the Harness group from outside lands on its default subtab `"dashboard"`. Note the id/label mismatch: id `"dashboard"` is labelled "Benchmark" and id `"files"` is labelled "Corpus". Within the Benchmark view there's a further `observabilitySubTab` (grounded / trace / matrix / prompts).
 - `src/SpotlightWorkbench.tsx` and `src/GroundlensMetrics.tsx` are each self-contained with their own palette; they do not share styling tokens with `App.tsx`. `GroundlensMetrics.tsx` shows a worked `DEMO_REPORT` until a live run lands (or when no key is configured), edits the corpus inline, and expands each question to show the real answers + retrieved evidence.
 - API-key-missing flow: backend throws `"GEMINI_API_KEY is missing..."`; frontend's `runFullBenchmark` / `runSingleCasePipeline` catches the 500, sets `apiKeyMissing=true`, shows the notice banner, and falls back to `preCalculatedRuns`. The console 500s look scary but the UX is by design.
 
@@ -96,7 +96,8 @@ The spotlight prompt explicitly states that **the Workbench performs no network 
 
 ## Environment
 
-- `GEMINI_API_KEY` — needed for live Gemini calls in both the benchmark pipelines and the Spotlight Workbench. Absence is handled (demo fallbacks), but every live feature degrades.
+- `GEMINI_API_KEY` — Developer-API key for live Gemini calls in both the benchmark pipelines and the Spotlight Workbench. Absence is handled (demo fallbacks), but every live feature degrades.
+- `GOOGLE_GENAI_USE_VERTEXAI=true` — alternative Gemini auth: route calls through Vertex AI using gcloud **Application Default Credentials** (the VM's service account, or `gcloud auth application-default login` in dev) instead of an API key. With it set, `GEMINI_API_KEY` is not required. `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` tune the Vertex target (default `vaclaims-194006` / `us-central1`).
 - `PORT` — overrides the 3002 default.
 - `.env` is gitignored; `.env.example` is the template.
 
