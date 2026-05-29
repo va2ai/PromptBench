@@ -13,6 +13,7 @@ import {
   Save,
   ChevronDown,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -122,52 +123,52 @@ const DEMO_REPORT: GroundlensReport = {
   title: "groundlens",
   subtitle: "model risk q&a · A/B test of two LLM behaviors",
   date: "2026-05-24",
-  document: "Argonaut Bank — LLM Anomaly Screening (AASS) v2.1",
+  document: "BVA Decision (Redacted Sample) — PTSD Increased Rating & TDIU",
   runA: { key: "calibrated", label: "Calibrated", promptLabel: "calibrated prompt", model: "sample" },
   runB: { key: "permissive", label: "Permissive", promptLabel: "permissive prompt", model: "sample" },
   questions: [
     {
-      id: "Q1", question: "What inputs is the model exposed to that the training data did not cover?",
+      id: "Q1", question: "What evidence does the record contain regarding the severity of the Veteran's PTSD?",
       evidence: [], runs: [
-        demoRun("calibrated", "Calibrated", 1.089, "trusted"),
-        demoRun("permissive", "Permissive", 0.86, "review"),
+        demoRun("calibrated", "Calibrated", 1.112, "trusted"),
+        demoRun("permissive", "Permissive", 0.701, "flagged"),
+      ],
+      note: { text: "Permissive run invented specific examiner names, exam dates, and numeric symptom scales not in the source.", tone: "flagged" },
+    },
+    {
+      id: "Q2", question: "What favorable findings did the Board accept as not in dispute?",
+      evidence: [], runs: [
+        demoRun("calibrated", "Calibrated", 1.284, "trusted"),
+        demoRun("permissive", "Permissive", 0.892, "review"),
       ],
     },
     {
-      id: "Q2", question: "What is the documented failure mode and how was it characterized?",
+      id: "Q3", question: "How does the Board approach the increased-rating analysis for PTSD?",
       evidence: [], runs: [
-        demoRun("calibrated", "Calibrated", 0.584, "flagged"),
-        demoRun("permissive", "Permissive", 0.596, "flagged"),
+        demoRun("calibrated", "Calibrated", 1.221, "trusted"),
+        demoRun("permissive", "Permissive", 0.724, "flagged"),
       ],
-      note: { text: "Both runs flagged — retrieval pulled an unrelated section. Geometry surfaces upstream issues honestly.", tone: "neutral" },
+      note: { text: "Permissive run fabricated a specific rating percentage and effective date the redacted decision withholds.", tone: "flagged" },
     },
     {
-      id: "Q3", question: "What is the worst case the safeguards do not catch?",
+      id: "Q4", question: "What does the TDIU analysis require, and what does marginal employment mean here?",
       evidence: [], runs: [
-        demoRun("calibrated", "Calibrated", 1.367, "trusted"),
-        demoRun("permissive", "Permissive", 0.711, "flagged"),
+        demoRun("calibrated", "Calibrated", 1.347, "trusted"),
+        demoRun("permissive", "Permissive", 0.768, "flagged"),
       ],
-      note: { text: "Permissive run invented a specific worst-case scenario not in the source.", tone: "flagged" },
+      note: { text: "Permissive run cited a specific earnings threshold not stated in the document.", tone: "flagged" },
     },
     {
-      id: "Q4", question: "How was the system validated for regulatory acceptance?",
+      id: "Q5", question: "What reasons-or-bases and duty-to-assist considerations did the Board weigh?",
       evidence: [], runs: [
-        demoRun("calibrated", "Calibrated", 1.328, "trusted"),
-        demoRun("permissive", "Permissive", 0.739, "flagged"),
+        demoRun("calibrated", "Calibrated", 1.176, "trusted"),
+        demoRun("permissive", "Permissive", 0.642, "flagged"),
       ],
-      note: { text: "Permissive run invented a third-party validator and a regulatory standard.", tone: "flagged" },
-    },
-    {
-      id: "Q5", question: "What drift has been measured since deployment?",
-      evidence: [], runs: [
-        demoRun("calibrated", "Calibrated", 1.252, "trusted"),
-        demoRun("permissive", "Permissive", 0.623, "flagged"),
-      ],
-      note: { text: "Permissive run fabricated specific post-deployment drift numbers.", tone: "flagged" },
+      note: { text: "Permissive run invented specific remand instructions and a named development item not in the source.", tone: "flagged" },
     },
   ],
   summary: {
-    calibrated: { label: "Calibrated", trusted: 4, review: 0, flagged: 1 },
+    calibrated: { label: "Calibrated", trusted: 5, review: 0, flagged: 0 },
     permissive: { label: "Permissive", trusted: 0, review: 1, flagged: 4 },
   },
 };
@@ -281,6 +282,7 @@ export default function GroundlensMetrics() {
   const [config, setConfig] = useState<GroundlensConfig | null>(null);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingQuestions, setGeneratingQuestions] = useState(false);
   const [error, setError] = useState("");
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [engineInfo, setEngineInfo] = useState<{ engine: string; model: string; source: string } | null>(null);
@@ -329,6 +331,42 @@ export default function GroundlensMetrics() {
       }
     } finally {
       setRunning(false);
+    }
+  };
+
+  const generateQuestions = async () => {
+    if (!config) return;
+    if (!config.document_text || config.document_text.trim().length < 200) {
+      setError("Paste at least 200 characters of document text before generating questions.");
+      return;
+    }
+    setGeneratingQuestions(true);
+    setError("");
+    setApiKeyMissing(false);
+    try {
+      const res = await fetch("/api/groundlens-generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_title: config.document_title,
+          document_text: config.document_text,
+          count: 5,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Question generation failed.");
+      const qs: { id: string; question: string }[] = Array.isArray(data.questions) ? data.questions : [];
+      if (qs.length === 0) throw new Error("Model returned no usable questions.");
+      setConfig({ ...config, questions: qs.map((q, i) => ({ id: q.id || `Q${i + 1}`, question: q.question })) });
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (/GEMINI_API_KEY/i.test(msg) || /structured_output/i.test(msg)) {
+        setApiKeyMissing(true);
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setGeneratingQuestions(false);
     }
   };
 
@@ -437,7 +475,19 @@ export default function GroundlensMetrics() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-mono font-bold tracking-wider" style={{ color: C.inkMute }}>QUESTIONS</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-mono font-bold tracking-wider" style={{ color: C.inkMute }}>QUESTIONS</label>
+                    <button
+                      onClick={generateQuestions}
+                      disabled={generatingQuestions}
+                      title="Generate a fresh question set from the document above"
+                      className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium disabled:opacity-60"
+                      style={{ background: C.panelAlt, color: C.blue, border: `1px solid ${C.border}` }}
+                    >
+                      {generatingQuestions ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {generatingQuestions ? "Generating…" : "Generate from document"}
+                    </button>
+                  </div>
                   <div className="space-y-2 mt-1">
                     {config.questions.map((q, i) => (
                       <div key={i} className="flex items-center gap-2">

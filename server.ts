@@ -266,38 +266,42 @@ const defaultSources = [
   }
 ];
 
-// Groundlens seed: a real model-risk document plus a question set. The document
-// answers every question in GENERAL terms (so a calibrated, grounded answer
-// scores well) but deliberately omits specific figures, named validators, and
-// concrete scenarios — so a permissive prompt that fabricates those specifics
-// gets caught by the deterministic SGI scorer. This is the actual experiment.
+// Groundlens seed: a redacted-style BVA decision plus a question set. The
+// document answers every question in GENERAL terms (so a calibrated, grounded
+// answer scores well) but deliberately omits specific dates, examiner names,
+// exact GAF/CAPS scores, and dollar figures — so a permissive prompt that
+// fabricates those specifics gets caught by the deterministic SGI scorer.
 const defaultGroundlensDoc = {
-  document_title: "Argonaut Bank — LLM Anomaly Screening (AASS) v2.1",
-  document_text: `Argonaut Bank — LLM Anomaly Screening System (AASS), Model Risk Documentation, version 2.1.
+  document_title: "BVA Decision (Redacted Sample) — PTSD Increased Rating & TDIU",
+  document_text: `Board of Veterans' Appeals — Decision (Redacted Sample).
+Issues on appeal: (1) entitlement to an increased disability rating for service-connected posttraumatic stress disorder (PTSD), currently rated less than total; (2) entitlement to a total disability rating based on individual unemployability (TDIU).
 
-PURPOSE AND SCOPE
-The AASS is a large-language-model-assisted screening layer that reviews structured transaction records and free-text payment memos to surface candidate anomalies for human investigation. It does not block transactions on its own; it ranks records and routes the highest-risk items to an analyst queue. The system is a decision-support tool, not an automated decision system, and every flag is reviewed by a human investigator before any action is taken.
+PROCEDURAL HISTORY
+The Veteran served on active duty and is in receipt of service connection for PTSD. Following a Regional Office rating decision that continued the current evaluation and denied TDIU, the Veteran perfected a timely appeal. The matter is now before the Board after development of the record and certification of the appeal. The Board has reviewed the claims file in its entirety; only the evidence most relevant to the issues on appeal is discussed below.
 
-INPUTS AND TRAINING-DATA COVERAGE
-The model was trained on a historical corpus of labeled transactions and analyst notes drawn from prior calendar years. In production it is exposed to several input categories that the training corpus does not fully represent. These include newly launched product types and payment rails that did not exist during the training window, transaction memos written in languages and code-switched mixtures that were sparse in the training data, and merchant categories that were re-coded after a taxonomy change. The documentation notes that inputs outside the training distribution are expected to produce lower-confidence scores and should be treated with additional caution by reviewers.
+EVIDENCE OF RECORD
+The record contains VA treatment records, a VA compensation and pension examination addressing the current severity of PTSD, lay statements from the Veteran and a family member describing day-to-day symptoms, and a private mental-health treatment summary submitted by the Veteran's representative. The lay statements describe sleep disturbance, intrusive recollections, social withdrawal, irritability, and difficulty sustaining concentration over a typical workday. The VA examination report characterizes symptoms in terms of frequency, severity, and functional effect, and includes the examiner's assessment of occupational and social impairment. The private treatment summary describes ongoing therapy and pharmacologic management and offers an opinion on functional limitations. No specific examination dates, examiner names, or numeric symptom scales are reproduced in this redacted decision.
 
-DOCUMENTED FAILURE MODE
-The primary documented failure mode is confident misranking of out-of-distribution memos: when a memo uses unfamiliar phrasing, the model can assign a moderate-to-high anomaly score on the basis of surface novelty rather than genuine risk signal. This was characterized during validation as a precision failure concentrated in the upper-middle score band, where benign-but-unusual records are over-flagged. The failure was characterized through error analysis on a held-out sample and described qualitatively in the validation report; it is mitigated by routing, not eliminated.
+FAVORABLE FINDINGS NOT IN DISPUTE
+The Board accepts as established, and these matters are not revisited: (a) the Veteran is service-connected for PTSD; (b) the lay statements describing the Veteran's symptoms are competent and credible to the extent they describe observable manifestations; and (c) the Veteran has had a continuous treatment history for the service-connected disability throughout the appeal period.
 
-LIMITS OF THE SAFEGUARDS
-The safeguards — score calibration, human review of every flag, and a suppression list for known benign patterns — are designed around per-record review. The documentation acknowledges that they are not designed to catch coordinated activity that stays below per-record thresholds: a sequence of individually unremarkable transactions structured to remain just under the flagging band can pass without any single record being surfaced. This residual risk is documented as accepted and is monitored through separate aggregate-level controls outside the scope of the model.
+INCREASED RATING FOR PTSD — ANALYSIS
+Mental-disorder ratings are assigned based on the level of occupational and social impairment supported by the evidence, with the schedular criteria providing examples of symptoms typical of each level. The Board considers all symptoms reasonably described by the evidence, whether or not specifically enumerated in the rating criteria, and rates based on the overall disability picture. The evidence here describes impairment that is more than transient or mild, with effects on work-like tasks, relationships, and routine activities; the question presented is whether the overall picture more nearly approximates the next-higher level for most of the appeal period. The Board notes that the lay and clinical descriptions are generally consistent across sources, that there are periods of relative improvement and periods of worsening, and that the examiner's narrative description of functional effect is consistent with the lay account. The Board does not resolve this question on the basis of any single symptom or score in isolation.
 
-VALIDATION FOR ACCEPTANCE
-The system was validated for internal acceptance through backtesting against historically labeled anomalies and through review by the bank's internal model risk committee. Validation covered discrimination on the labeled sample, stability of scores across reruns, and a qualitative review of failure cases. The documentation states that acceptance was granted on the condition of mandatory human review and periodic revalidation; it does not record any external or third-party validation, and it does not cite a specific external regulatory standard as the basis for acceptance.
+TDIU — ANALYSIS
+A total disability rating based on individual unemployability is warranted where the service-connected disabilities, without regard to age or non-service-connected conditions, render the Veteran unable to secure or follow a substantially gainful occupation. Marginal employment — including employment in a protected environment such as a family business or sheltered workshop — is not considered substantially gainful. The analysis must consider the Veteran's education, training, and prior work history and must focus on functional limitations attributable to service-connected disability, not on the availability of work in the labor market. The record contains evidence of the Veteran's prior occupational history and education, lay description of why sustained work has become difficult, and clinical opinions addressing functional capacity. The Board considers the cumulative effect of service-connected disability and whether the described limitations are consistent with the ability to obtain and maintain substantially gainful employment.
 
-DRIFT MONITORING SINCE DEPLOYMENT
-Since deployment, input drift is monitored using population-stability measures on the model's input features, computed on a recurring schedule. The documentation reports that some feature drift has been observed since go-live, consistent with the product and taxonomy changes noted above, and that the magnitude is under review by the monitoring team. No specific post-deployment drift magnitudes, dates, or performance deltas are recorded in this version of the document.`,
+DEVELOPMENT AND REASONS-OR-BASES CONSIDERATIONS
+The Board has considered whether the VA examination of record is adequate for rating purposes, whether the examiner addressed the functional effects of the disability rather than merely listing symptoms, and whether the Regional Office's prior decision provided adequate reasons or bases for the conclusions reached. The Board has also considered whether favorable evidence — including the lay statements and the private treatment summary — was given appropriate weight. Where the record is unclear on a material point, the duty to assist requires further development rather than denial on an incomplete record.
+
+ORDER AND REMAND
+For the reasons discussed above, the issues on appeal are addressed in the ORDER and REMAND sections of this decision. The Board does not, in this redacted sample, set out the specific percentage assigned, the specific effective date, or the precise scope of remand development; those determinations are reflected in the unredacted decision and the rating codesheet that accompanies it.`,
   questions: [
-    { id: "Q1", question: "What inputs is the model exposed to that the training data did not cover?" },
-    { id: "Q2", question: "What is the documented failure mode and how was it characterized?" },
-    { id: "Q3", question: "What is the worst case the safeguards do not catch?" },
-    { id: "Q4", question: "How was the system validated for regulatory acceptance?" },
-    { id: "Q5", question: "What drift has been measured since deployment?" },
+    { id: "Q1", question: "What evidence does the record contain regarding the severity of the Veteran's PTSD?" },
+    { id: "Q2", question: "What favorable findings did the Board accept as not in dispute?" },
+    { id: "Q3", question: "How does the Board approach the increased-rating analysis for PTSD?" },
+    { id: "Q4", question: "What does the TDIU analysis require, and what does marginal employment mean here?" },
+    { id: "Q5", question: "What reasons-or-bases and duty-to-assist considerations did the Board weigh?" },
   ],
 };
 
@@ -1788,6 +1792,111 @@ app.get("/api/groundlens-engine", (_req, res) => {
     res.json({ engine: "gemini", model: process.env.GEMINI_MODEL || "gemini-3.1-flash", source: "GEMINI_API_KEY" });
   } else {
     res.json({ engine: "claude", model: "sonnet", source: "claude -p fallback" });
+  }
+});
+
+// Generate a question set for a user-supplied document. Uses the same dual
+// engine path as /api/spotlight and /api/groundlens — Gemini if a key is set,
+// else the claude -p fallback. Returns a JSON list of {id, question}; the
+// frontend decides whether to persist them.
+const groundlensQuestionGenSchema = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { id: { type: "string" }, question: { type: "string" } },
+        required: ["id", "question"],
+      },
+    },
+  },
+  required: ["questions"],
+} as const;
+
+app.post("/api/groundlens-generate-questions", async (req, res) => {
+  const documentText = String(req.body?.document_text ?? "");
+  const documentTitle = String(req.body?.document_title ?? "");
+  const count = Math.max(3, Math.min(8, Number(req.body?.count) || 5));
+
+  if (!documentText || documentText.trim().length < 200) {
+    return res.status(400).json({ error: "document_text must be at least 200 characters." });
+  }
+
+  const prompt = `You are designing a grounding-evaluation question set for a single source document. The questions will be used to A/B test two LLM behaviors (a calibrated, evidence-only behavior vs a permissive, gap-filling behavior) over the same retrieved evidence from this document.
+
+Design exactly ${count} questions that:
+- Are answerable in general terms from this document.
+- Probe distinct sections or facets of the document (do not cluster on one topic).
+- Invite specifics that the document discusses only in general terms — so a permissive behavior is tempted to fabricate concrete figures, dates, names, or scenarios the document does not contain.
+- Are short, neutral, and free of leading language.
+- Do not reference anything outside this document.
+
+Return strict JSON matching the schema: a "questions" array with ${count} items, each having "id" ("Q1", "Q2", …) and "question". Do not wrap in markdown.
+
+DOCUMENT TITLE: ${documentTitle || "(untitled)"}
+
+SOURCE DOCUMENT:
+${documentText}`;
+
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  const engine = hasGeminiKey ? "gemini" : "claude";
+  const modelName = hasGeminiKey ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+
+  try {
+    let parsed: any;
+    let usage: any;
+
+    if (hasGeminiKey) {
+      const response = await generateContentWithRetry({
+        model: modelName,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: { id: { type: Type.STRING }, question: { type: Type.STRING } },
+                  required: ["id", "question"],
+                },
+              },
+            },
+            required: ["questions"],
+          } as any,
+        },
+      });
+      parsed = JSON.parse(response.text || "{}");
+      usage = {
+        prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+        output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+      };
+    } else {
+      const out = await callClaudePSpotlight(prompt, groundlensQuestionGenSchema);
+      parsed = out.parsed;
+      usage = { prompt_tokens: out.usage.input_tokens, output_tokens: out.usage.output_tokens, cost_usd: out.usage.cost_usd };
+    }
+
+    const rawList: any[] = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    const questions = rawList
+      .map((q, i) => ({
+        id: String(q?.id || `Q${i + 1}`),
+        question: String(q?.question || "").trim(),
+      }))
+      .filter((q) => q.question.length > 0)
+      .slice(0, count);
+
+    if (questions.length === 0) {
+      return res.status(500).json({ error: "Model returned no usable questions." });
+    }
+
+    res.json({ success: true, engine, model: modelName, questions, _usage: usage });
+  } catch (err: any) {
+    console.error("Groundlens question generation error", err);
+    res.status(500).json({ error: err.message || "Failed to generate questions." });
   }
 });
 
