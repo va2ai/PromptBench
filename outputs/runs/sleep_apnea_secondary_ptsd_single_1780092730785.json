@@ -1,0 +1,30 @@
+{
+  "case_id": "sleep_apnea_secondary_ptsd",
+  "pipeline": "single",
+  "question": "The veteran was denied service connection for sleep apnea secondary to PTSD. What appeal theories are available?",
+  "answer": "Based on the provided source corpus, the primary appeal theory available is:\n\n## Secondary Service Connection (38 CFR § 3.310)\n\n**Applicable Regulation:** 38 CFR § 3.310\n\n**Regulatory Text:** \"Disability which is proximately due to or the result of a service-connected disease or injury shall be service connected. Any increase in severity of a nonservice-connected disease or injury that is proximately due to or the result of a service-connected disease or injury will be service connected for the degree of aggravation.\"\n\n**Application:** To appeal the denial of service connection for sleep apnea secondary to PTSD, the veteran would invoke 38 CFR § 3.310, which provides that a disability (sleep apnea) proximately due to or resulting from a service-connected disease (PTSD) must be service connected. The veteran must establish the proximate causal relationship between the service-connected PTSD and the claimed sleep apnea.\n\n**Note on Other Sources:** The remaining sources in the corpus (38 CFR §§ 3.105, 4.16, 3.344) address rating reductions and adjustments rather than theories for appealing initial denials of service connection and are not applicable to this appeal scenario.",
+  "citations_used": [
+    "38 CFR § 3.310"
+  ],
+  "evidence_cards": [],
+  "missing_evidence": [],
+  "validation": {},
+  "score": {
+    "total": 61,
+    "required_concepts": 16,
+    "forbidden_claims": 20,
+    "citation_validity": 20,
+    "uncertainty": 0,
+    "clarity": 5
+  },
+  "eval_logs": [
+    "Required Concepts (16/40): Found 2 of 5. Details: ✓ \"secondary service connection\", ✓ \"aggravation\", ✗ \"medical nexus\", ✗ \"VA exam adequacy\", ✗ \"evidence gaps\"",
+    "Forbidden Claims (20/20): Great, no forbidden claims triggered!",
+    "Citation Validity (20/20): All 1 cited authorities exist in the source corpus. Checked: Valid: \"38 CFR § 3.310\"",
+    "Uncertainty / Evidence Gaps (0/10): Categorical answer — no evidence-gap or calibration language (e.g. \"would need\", \"evidence gap\", \"inadequate exam\", \"not guaranteed\").",
+    "Structure (5/10): Partially formatted structure. Needs both headings and lists."
+  ],
+  "latency_ms": 79322,
+  "estimated_cost_usd": 0.0007032,
+  "provider": "claude"
+}

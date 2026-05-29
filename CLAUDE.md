@@ -19,7 +19,7 @@ There is no test suite. The README's claim of port 3000 is stale — `server.ts`
 
 ## Architecture
 
-This is **one Express server** (`server.ts`, ~1600 lines) that does everything: pipeline orchestration, scoring, file I/O, the Spotlight endpoint, **and** serving the React SPA via Vite middleware in dev mode. There is no separate API service.
+This is **one Express server** (`server.ts`, ~2150 lines) that does everything: pipeline orchestration, scoring, file I/O, the Spotlight endpoint, **and** serving the React SPA via Vite middleware in dev mode. There is no separate API service.
 
 ### Server topology
 
@@ -50,6 +50,8 @@ The three pipelines and their evaluation live as inline functions in `server.ts`
 
 All live LLM endpoints (`run-single-pipeline`, `run-all-pipelines`, `stream-single-pipeline`, `spotlight`, `groundlens`, `groundlens-generate-questions`) accept a **`provider: "gemini" | "claude"`** field (body, or query for the SSE stream). It's resolved by `resolveProvider()` (explicit choice wins; default = Gemini if a backend is live, else `claude -p`) and dispatched through one helper, **`generateStructured({provider, model, prompt, schema})`**, which routes to Gemini's `generateContentWithRetry` (via `toGeminiSchema()`, since each call site now declares a single plain JSON Schema) or to `callClaudePSpotlight` (`claude -p`). The frontend exposes this as one app-wide toggle in the nav (`src/App.tsx`, persisted to `localStorage`). The SSE stream **degrades to a single final event under Claude** (`claude -p` can't token-stream structured output).
 
+The **model** is also scoped to the provider by **`resolveModel(provider, requested)`**: Gemini requests default to `gemini-3.1-flash` (or `GEMINI_MODEL`), and Claude requests are constrained to `CLAUDE_MODELS` (`sonnet` / `opus` / `haiku`, default `sonnet`) so a Gemini model name can never reach `claude -p` and vice-versa. The chosen Claude model is threaded through `generateStructured` → `callClaudePSpotlight(prompt, schema, model)` into `claude -p --model` (it is **not** hardcoded to sonnet anymore). The Benchmark model dropdown in `App.tsx` is **provider-aware** — it lists Gemini models under Gemini and the three Claude aliases under Claude, and resets `selectedModel` to the provider's default whenever the current pick isn't valid for the active provider.
+
 `evaluateAnswer()` in `server.ts` is the canonical scorer — required concepts (40), forbidden claims (20), citation validity (20), uncertainty (10), structure (10). If you change the rubric, the pre-calculated demo runs in `src/App.tsx` (`preCalculatedRuns`) also need updating, otherwise the canned demo will disagree with live runs.
 
 ### Spotlight Workbench dual engine
@@ -72,7 +74,7 @@ The spotlight prompt explicitly states that **the Workbench performs no network 
 
 ### Frontend
 
-- `src/App.tsx` (~3000 lines) is the single top-level component. There are **three top-level tabs** (`TOP_TABS`): **Harness**, **Spotlight** (renders `SpotlightWorkbench.tsx`), **Groundlens** (renders `GroundlensMetrics.tsx`). Harness is itself a group (`HARNESS_GROUP` / `HARNESS_SUBTABS`) with three **subtabs**: **Benchmark** (live benchmark, internal id `"dashboard"`), **Corpus** (`"files"`, edit cases/sources), **Report** (comparison_report.md). The `TabId` union is the flat set `"dashboard" | "files" | "report" | "spotlight" | "groundlens"`; entering the Harness group from outside lands on its default subtab `"dashboard"`. Note the id/label mismatch: id `"dashboard"` is labelled "Benchmark" and id `"files"` is labelled "Corpus". Within the Benchmark view there's a further `observabilitySubTab` (grounded / trace / matrix / prompts).
+- `src/App.tsx` (~2650 lines) is the single top-level component. There are **three top-level tabs** (`TOP_TABS`): **Harness**, **Spotlight** (renders `SpotlightWorkbench.tsx`), **Groundlens** (renders `GroundlensMetrics.tsx`). Harness is itself a group (`HARNESS_GROUP` / `HARNESS_SUBTABS`) with three **subtabs**: **Benchmark** (live benchmark, internal id `"dashboard"`), **Corpus** (`"files"`, edit cases/sources), **Report** (comparison_report.md). The `TabId` union is the flat set `"dashboard" | "files" | "report" | "spotlight" | "groundlens"`; entering the Harness group from outside lands on its default subtab `"dashboard"`. Note the id/label mismatch: id `"dashboard"` is labelled "Benchmark" and id `"files"` is labelled "Corpus". Within the Benchmark view there's a further `observabilitySubTab` (grounded / trace / matrix / prompts).
 - `src/SpotlightWorkbench.tsx` and `src/GroundlensMetrics.tsx` are each self-contained with their own palette; they do not share styling tokens with `App.tsx`. `GroundlensMetrics.tsx` shows a worked `DEMO_REPORT` until a live run lands (or when no key is configured), edits the corpus inline, and expands each question to show the real answers + retrieved evidence.
 - API-key-missing flow: backend throws `"GEMINI_API_KEY is missing..."`; frontend's `runFullBenchmark` / `runSingleCasePipeline` catches the 500, sets `apiKeyMissing=true`, shows the notice banner, and falls back to `preCalculatedRuns`. The console 500s look scary but the UX is by design.
 
