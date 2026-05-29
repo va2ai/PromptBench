@@ -1,0 +1,61 @@
+{
+  "case_id": "tdiu_part_time_work",
+  "pipeline": "two",
+  "question": "The Board denied TDIU because the veteran does some part-time work. What legal issues should be reviewed?",
+  "answer": "# Legal Issues on TDIU Denial Based on Part-Time Work\n\n## I. Core Legal Issue: Marginal Employment Under 38 CFR § 4.16\n\nThe Board's denial is legally suspect if the veteran's part-time work constitutes **marginal employment**, which is **explicitly excluded** from \"substantially gainful occupation\" under the controlling regulation.\n\n### What the Law Requires\n\n**38 CFR § 4.16** provides:\n> \"Total disability ratings for compensation may be assigned where the schedular rating is less than total when the disabled person is unable to secure or follow a substantially gainful occupation as a result of service-connected disabilities. Marginal employment shall not be considered substantially gainful employment.\"\n\n### Key Sub-Issues to Review\n\n1. **Income Threshold Test:** Did the Board evaluate whether the veteran's earnings are at or below the federal poverty threshold? Under VA adjudication practice implementing § 4.16, income at or below that threshold is the primary bright-line indicator of marginal employment.\n\n2. **Sheltered/Protected Work Analysis:** Even if income nominally exceeds the poverty threshold, did the Board assess whether the work is performed in a sheltered or protected environment (e.g., a family business, accommodated schedule, or employer providing special accommodations due to the veteran's disability)?\n\n3. **Error of Law — Categorical Disqualification:** The central reversible error to review is whether the Board **treated any part-time work as categorically disqualifying**, without applying the marginal employment threshold test. A per se rule that \"part-time work = substantially gainful employment\" is not consistent with § 4.16 and constitutes an error of law reviewable by the Court of Appeals for Veterans Claims (CAVC).\n\n4. **Regularity and Reliability of Work:** Was the work intermittent, irregular, or undertaken only during remission of symptoms? The Board must consider whether the veteran could maintain the work consistently — not just that some work was performed.\n\n---\n\n## II. Procedural Due Process: Reduction or Discontinuance Under 38 CFR § 3.105\n\n**38 CFR § 3.105** is implicated if the veteran **previously held a TDIU award** that was reduced or discontinued as a result of the part-time employment finding.\n\n### Key Sub-Issues to Review\n\n1. **Prior Notice:** Did VA provide the veteran with written notice of the **proposed reduction** before taking rating action?\n\n2. **Opportunity to Respond:** Was the veteran afforded a meaningful opportunity to submit evidence and argument before the reduction or discontinuance took effect?\n\n3. **Sequencing of Rating Action:** Did the rating decision follow the required procedural sequence — proposal → notice → response period → final action — or did VA skip steps and issue a final denial directly?\n\nIf a prior TDIU was on the record and these procedural protections were not observed, the denial is independently reversible on due process grounds, separate from any substantive merits analysis.\n\n---\n\n## III. Sustained Improvement Requirement Under 38 CFR § 3.344\n\n**38 CFR § 3.344** applies in the narrower scenario where the TDIU denial is framed as a **rating reduction** and the underlying service-connected disability is subject to temporary or episodic improvement (e.g., PTSD, mental health conditions, episodic musculoskeletal conditions).\n\n### Key Sub-Issues to Review\n\n1. **Sustained vs. Temporary Improvement:** Did the Board distinguish between temporary functional improvement (such as a period of part-time work during a relatively stable phase) and **sustained, demonstrated improvement** across all evidence in the record?\n\n2. **All-Evidence Standard:** § 3.344 requires that the conclusion of improvement be clearly warranted by **all** the evidence — not merely a snapshot of current employment activity. A single examiner's opinion or a short period of part-time work does not satisfy this standard.\n\n3. **Scope of Review:** If the denial is actually a reduction dressed as an initial denial (e.g., the veteran held effective TDIU through a prior rating), § 3.344's protections attach and the Board's failure to apply them is reversible error.\n\n---\n\n## IV. Summary of Issues for Appeal or Further Review\n\n| Issue | Governing Authority | Priority |\n|---|---|---|\n| Board failed to apply marginal employment test | 38 CFR § 4.16 | **High — likely reversible error** |\n| Board treated part-time work as categorically disqualifying | 38 CFR § 4.16 | **High — error of law** |\n| Income not evaluated against federal poverty threshold | 38 CFR § 4.16 | **High** |\n| Sheltered/accommodated work environment not analyzed | 38 CFR § 4.16 | **High** |\n| Procedural protections for reduction not observed | 38 CFR § 3.105 | **Medium (if prior award existed)** |\n| Sustained improvement not shown across all evidence | 38 CFR § 3.344 | **Low-Medium (if episodic condition)** |\n\n---\n\n## V. Missing Evidence — Gaps in the Provided Cards\n\nThe following legal authorities and factual issues are **not covered by the provided evidence cards** and should be sourced for a complete review:\n\n1. **Case Law on Marginal Employment Standard:** CAVC decisions defining the marginal employment test (e.g., *Faust v. West*, 13 Vet. App. 342 (2000); *Moore v. Derwinski*, 1 Vet. App. 356 (1991)) are absent. These cases operationalize § 4.16 and are essential for any appeal brief.\n\n2. **Current Federal Poverty Threshold Figure:** The specific dollar threshold used to evaluate marginal employment in the year of the rating decision is not provided. This figure changes annually and must be matched to the correct adjudication year.\n\n3. **38 CFR § 4.16(a) vs. § 4.16(b) Distinction:** The cards do not address the distinction between **direct TDIU under § 4.16(a)** (schedular — single disability at 60% or combined at 70%) and **extra-schedular TDIU under § 4.16(b)** (referred to the Director of Compensation). If the veteran does not meet schedular thresholds, the correct standard and procedural path differ significantly.\n\n4. **38 CFR § 3.340 and § 3.341:** These regulations govern the total disability standard and the employability determination more broadly. They are the regulatory context for § 4.16 and their absence leaves the framework incomplete.\n\n5. **VA's Duty to Assist (38 CFR § 3.159):** There is no card addressing whether VA fulfilled its duty to assist in obtaining a vocational assessment or independent medical opinion on the effect of the service-connected disabilities on the veteran's employability — a common independent ground for remand when the record is underdeveloped on the occupational impact question.\n\n6. **Vocational Expert or VA Examination Record:** The factual record of what evidence the Board actually had before it regarding the nature, frequency, hours, and income of the part-time work is not provided. The legal analysis assumes the Board lacked this; confirming that assumption requires reviewing the rating decision and Board transcript.",
+  "citations_used": [
+    "38 CFR § 4.16",
+    "38 CFR § 3.105",
+    "38 CFR § 3.344"
+  ],
+  "evidence_cards": [
+    {
+      "source_id": "cfr_4_16",
+      "citation": "38 CFR § 4.16",
+      "relevance": "high",
+      "excerpt": "Total disability ratings for compensation may be assigned where the schedular rating is less than total when the disabled person is unable to secure or follow a substantially gainful occupation as a result of service-connected disabilities. Marginal employment shall not be considered substantially gainful employment.",
+      "why_it_matters": "This is the core TDIU regulation at issue. The Board's denial based solely on part-time work is legally suspect if that work qualifies as 'marginal employment.' Under § 4.16, marginal employment is explicitly excluded from the definition of substantially gainful occupation. VA regulations (and case law applying this section) define marginal employment as income at or below the federal poverty threshold, or sheltered/protected work environments. The legal question to review is whether the Board properly analyzed whether the veteran's part-time work meets the marginal employment standard, or whether it incorrectly treated any part-time work as disqualifying without applying that threshold test."
+    },
+    {
+      "source_id": "cfr_3_105",
+      "citation": "38 CFR § 3.105",
+      "relevance": "medium",
+      "excerpt": "Where a reduction in evaluation of a service-connected disability is considered warranted and the lower evaluation would result in a reduction or discontinuance of compensation payments, rating action will be taken and the beneficiary will be notified of the proposed reduction.",
+      "why_it_matters": "Relevant if the veteran previously held a TDIU award that was subsequently discontinued or reduced due to the part-time employment. In that scenario, § 3.105 requires procedural protections before any reduction or discontinuance takes effect, including proper notice and an opportunity to respond. Review whether those procedural requirements were satisfied if this denial follows a prior award."
+    },
+    {
+      "source_id": "cfr_3_344",
+      "citation": "38 CFR § 3.344",
+      "relevance": "low",
+      "excerpt": "Ratings on account of diseases subject to temporary or episodic improvement will not be reduced on any one examination except where all the evidence clearly warrants the conclusion that sustained improvement has been demonstrated.",
+      "why_it_matters": "Marginally relevant if the TDIU denial is framed as a rating reduction rather than an initial denial, and the underlying service-connected disability is of a type subject to temporary or episodic improvement. In that narrow scenario, the Board would need to show sustained improvement across all evidence — not just current employment activity — before reducing or withholding a total disability rating."
+    }
+  ],
+  "missing_evidence": [
+    "CAVC case law operationalizing the marginal employment standard under § 4.16 (e.g., Faust v. West, Moore v. Derwinski)",
+    "Current and adjudication-year federal poverty threshold figures used to evaluate marginal employment",
+    "38 CFR § 4.16(a) vs. § 4.16(b) distinction — schedular vs. extra-schedular TDIU pathways",
+    "38 CFR § 3.340 and § 3.341 — total disability standard and employability determination framework",
+    "38 CFR § 3.159 — VA duty to assist, including failure to obtain vocational assessment or independent medical opinion on employability",
+    "Factual record: nature, frequency, hours, and income of the veteran's part-time work as reflected in the rating decision and Board transcript"
+  ],
+  "validation": {},
+  "score": {
+    "total": 76,
+    "required_concepts": 16,
+    "forbidden_claims": 20,
+    "citation_validity": 20,
+    "uncertainty": 10,
+    "clarity": 10
+  },
+  "eval_logs": [
+    "Required Concepts (16/40): Found 2 of 5. Details: ✓ \"substantially gainful employment\", ✓ \"marginal employment\", ✗ \"protected work environment\", ✗ \"education and work history\", ✗ \"functional limitations\"",
+    "Forbidden Claims (20/20): Great, no forbidden claims triggered!",
+    "Citation Validity (20/20): All 3 cited authorities exist in the source corpus. Checked: Valid: \"38 CFR § 4.16\", Valid: \"38 CFR § 3.105\", Valid: \"38 CFR § 3.344\"",
+    "Uncertainty / Evidence Gaps (10/10): Calibrated — flags gaps/limits via 2 markers: remand, missing.",
+    "Structure (10/10): Structured layout containing subheadings/bold sections and lists."
+  ],
+  "latency_ms": 77074,
+  "estimated_cost_usd": 0.0010998,
+  "provider": "claude"
+}

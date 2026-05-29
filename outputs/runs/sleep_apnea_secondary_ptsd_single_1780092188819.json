@@ -1,0 +1,28 @@
+{
+  "case_id": "sleep_apnea_secondary_ptsd",
+  "pipeline": "single",
+  "question": "The veteran was denied service connection for sleep apnea secondary to PTSD. What appeal theories are available?",
+  "answer": "**Missing Required Inputs**\n\nNo source corpus or question was provided for analysis. The template describes the required analytical framework but cannot be executed without:\n\n1. **Source Corpus**: The explicit text, regulations, case citations, and medical evidence to analyze\n2. **Question**: The specific VA disability appeal scenario to address\n\nTo proceed with the legal analysis, please provide:\n- The relevant VA regulations, BVA decisions, or case law citations\n- The factual record and medical evidence\n- The specific appeal question or service connection claim being contested\n\nOnce provided, the analysis will address all five required sections:\n1. Secondary Service Connection via Aggravation\n2. Medical Nexus Examination  \n3. VA Examination Adequacy Assessment\n4. Evidence Gaps & Needed Elements\n5. Viable Appeal Theories (Bulleted Summary)\n\nEach section will cite exclusively to the provided corpus.",
+  "citations_used": [],
+  "evidence_cards": [],
+  "missing_evidence": [],
+  "validation": {},
+  "score": {
+    "total": 72,
+    "required_concepts": 32,
+    "forbidden_claims": 20,
+    "citation_validity": 0,
+    "uncertainty": 10,
+    "clarity": 10
+  },
+  "eval_logs": [
+    "Required Concepts (32/40): Found 4 of 5. Details: ✓ \"secondary service connection\", ✓ \"aggravation\", ✓ \"medical nexus\", ✗ \"VA exam adequacy\", ✓ \"evidence gaps\"",
+    "Forbidden Claims (20/20): Great, no forbidden claims triggered!",
+    "Citation Validity (0/20): Omission! No authority citations found.",
+    "Uncertainty / Evidence Gaps (10/10): Calibrated — flags gaps/limits via 3 markers: evidence gap, inadequate/adequacy, missing.",
+    "Structure (10/10): Structured layout containing subheadings/bold sections and lists."
+  ],
+  "latency_ms": 80814,
+  "estimated_cost_usd": 0.0003543,
+  "provider": "claude"
+}

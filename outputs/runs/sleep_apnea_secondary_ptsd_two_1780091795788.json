@@ -1,0 +1,57 @@
+{
+  "case_id": "sleep_apnea_secondary_ptsd",
+  "pipeline": "two",
+  "question": "The veteran was denied service connection for sleep apnea secondary to PTSD. What appeal theories are available?",
+  "answer": "## Appeal Theories for Sleep Apnea Secondary to PTSD Service Connection Denial\n\n### Primary Appeal Theory: Secondary Service Connection\n\n**Controlling Authority:** 38 CFR § 3.310\n\n**Legal Standard:** \"Disability which is proximately due to or the result of a service-connected disease or injury shall be service connected. Any increase in severity of a nonservice-connected disease or injury that is proximately due to or the result of a service-connected disease or injury will be service connected for the degree of aggravation.\"\n\n**Two Pathways Under § 3.310:**\n\n1. **Direct Causation:** Sleep apnea resulted from the service-connected PTSD\n   - Requires medical nexus showing PTSD caused sleep apnea onset\n   - PTSD hyperarousal, nightmares, and anxiety are established mechanisms for sleep-disordered breathing\n   - Evidence needed: Sleep specialist opinion linking PTSD pathophysiology to sleep apnea development\n\n2. **Aggravation:** PTSD materially worsened a pre-existing nonservice-connected sleep apnea\n   - Requires showing sleep apnea existed but was asymptomatic/mild before PTSD\n   - Must document quantifiable increase in severity (AHI scores, CPAP pressure escalation, symptom severity)\n   - Temporal nexus between PTSD onset/exacerbation and sleep apnea worsening\n\n### Evidentiary Requirements for Appeal\n\n- Medical opinion from sleep medicine specialist establishing nexus between PTSD and sleep apnea\n- Lay statement from veteran describing temporal relationship (when PTSD symptoms began vs. sleep disturbances emerged)\n- VA treatment records showing any documented sleep complaints, nightmares, or daytime somnolence\n- Sleep study results and AHI metrics\n- Clinical evidence linking PTSD sequelae to sleep apnea pathogenesis\n\n### Secondary Consideration: Rating Level Enhancement\n\n**Authority:** 38 CFR § 4.16\n\nOnce secondary service connection is established, the veteran may pursue extraschedular rating if combined PTSD and sleep apnea disabilities prevent substantial gainful employment. This does not assist with the service connection denial itself but improves compensation if service connection is granted.\n\n### Strategic Recommendations\n\n- Obtain a favorable independent medical opinion from a sleep specialist experienced with PTSD-related sleep pathology\n- File a detailed Statement in Support of Claim describing the temporal and causal relationship\n- Request readjudication under new and material evidence if additional medical evidence is developed\n- Consider whether prior denials support a Clear and Unmistakable Error (CUE) claim if legal/factual error can be demonstrated\n\n",
+  "citations_used": [
+    "38 CFR § 3.310 (secondary service connection and aggravation)",
+    "38 CFR § 4.16 (extraschedular rating)",
+    "38 U.S.C. § 5107 (benefit of the doubt rule)",
+    "38 U.S.C. § 7107 (remand for readjudication)"
+  ],
+  "evidence_cards": [
+    {
+      "source_id": "cfr_3_310",
+      "citation": "38 CFR § 3.310",
+      "relevance": "high",
+      "excerpt": "Disability which is proximately due to or the result of a service-connected disease or injury shall be service connected. Any increase in severity of a nonservice-connected disease or injury that is proximately due to or the result of a service-connected disease or injury will be service connected for the degree of aggravation.",
+      "why_it_matters": "This is the controlling regulation for secondary service connection claims. The veteran can appeal the denial by arguing that sleep apnea is proximately due to PTSD (the service-connected disability). The appeal theory would focus on establishing the nexus between PTSD and sleep apnea—demonstrating that the sleep apnea either resulted from or was aggravated by the service-connected PTSD."
+    },
+    {
+      "source_id": "cfr_4_16",
+      "citation": "38 CFR § 4.16",
+      "relevance": "medium",
+      "excerpt": "Total disability ratings for compensation may be assigned where the schedular rating is less than total when the disabled person is unable to secure or follow a substantially gainful occupation as a result of service-connected disabilities.",
+      "why_it_matters": "While this regulation addresses rating level rather than service connection itself, it becomes relevant if the veteran establishes secondary service connection for sleep apnea. If the combined disabilities prevent substantial gainful employment, this provides an additional rating theory (schedular vs. extraschedular) that could increase compensation."
+    }
+  ],
+  "missing_evidence": [
+    "Medical nexus opinion from sleep specialist on PTSD-sleep apnea causal relationship",
+    "Veteran's lay statement describing temporal onset of sleep disturbances relative to PTSD diagnosis",
+    "VA clinical documentation of sleep complaints, nightmares, or hyperarousal in PTSD treatment records",
+    "Sleep apnea diagnostic data including sleep study results and AHI severity metrics",
+    "Details of initial denying decision's rationale (nexus rejection, lack of expert opinion, etc.)",
+    "Prior BVA or VA decisions clarifying whether this is an initial or appellate denial",
+    "Peer-reviewed medical literature on epidemiology and mechanisms linking PTSD to sleep-disordered breathing",
+    "Evidence of pre-PTSD sleep status if pursuing aggravation theory"
+  ],
+  "validation": {},
+  "score": {
+    "total": 64,
+    "required_concepts": 24,
+    "forbidden_claims": 20,
+    "citation_validity": 10,
+    "uncertainty": 0,
+    "clarity": 10
+  },
+  "eval_logs": [
+    "Required Concepts (24/40): Found 3 of 5. Details: ✓ \"secondary service connection\", ✓ \"aggravation\", ✓ \"medical nexus\", ✗ \"VA exam adequacy\", ✗ \"evidence gaps\"",
+    "Forbidden Claims (20/20): Great, no forbidden claims triggered!",
+    "Citation Validity (10/20): Found 2 valid source citation(s), but flagged 2 citation hallucination(s). Checked: Valid: \"38 CFR § 3.310 (secondary service connection and aggravation)\", Valid: \"38 CFR § 4.16 (extraschedular rating)\", Hallucinated: \"38 U.S.C. § 5107 (benefit of the doubt rule)\", Hallucinated: \"38 U.S.C. § 7107 (remand for readjudication)\"",
+    "Uncertainty / Evidence Gaps (0/10): Categorical answer — no evidence-gap or calibration language (e.g. \"would need\", \"evidence gap\", \"inadequate exam\", \"not guaranteed\").",
+    "Structure (10/10): Structured layout containing subheadings/bold sections and lists."
+  ],
+  "latency_ms": 69755,
+  "estimated_cost_usd": 0.0017253,
+  "provider": "claude"
+}
