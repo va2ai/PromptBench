@@ -55,6 +55,41 @@ function isGeminiAvailable(): boolean {
 
 export type Provider = "gemini" | "claude";
 
+// Timestamped step logger. Every pipeline LLM call funnels through generateStructured /
+// callClaudePSpotlight, and the synchronous endpoints emit no progress between request and
+// response — so a slow `claude -p` run is indistinguishable from a hang. These logs make the
+// boundaries visible: which step is running, on which provider/model, and how long it took.
+//
+// Each call is ALSO broadcast over the SSE log bus (see GET /api/logs/stream) so the UI shows
+// live progress during a slow multi-call run instead of appearing stuck.
+type LogSink = (chunk: string) => void;
+const logClients = new Set<LogSink>();
+
+// `msg` is the raw developer log (console + promptbench.log, for debugging). `friendly` is the
+// human-readable status. Both are broadcast over the SSE bus as a {log:{ts,scope,msg,friendly}}
+// event; the UI shows `friendly` by default and reveals the raw `[scope] msg` via a toggle.
+// Low-level steps pass no `friendly`, so they only appear when the user flips on raw mode.
+function logStep(scope: string, msg: string, friendly?: string): void {
+  const ts = new Date().toISOString();
+  console.log(`[${ts}] [${scope}] ${msg}`);
+  if (logClients.size) {
+    const payload = `data: ${JSON.stringify({ log: { ts, scope, msg, friendly } })}\n\n`;
+    for (const write of logClients) {
+      try { write(payload); } catch { /* close handler removes dead clients */ }
+    }
+  }
+}
+
+// Human-readable model / pipeline names for the status line.
+function prettyModel(m: string): string {
+  if (m === "haiku" || m === "sonnet" || m === "opus") return `Claude ${m[0].toUpperCase()}${m.slice(1)}`;
+  if (m.startsWith("gemini-")) return m.replace(/^gemini-/, "Gemini ").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return m;
+}
+function prettyPipeline(p: string): string {
+  return p === "single" ? "single-prompt" : p === "two" ? "two-agent" : p === "three" ? "three-agent" : p;
+}
+
 // Resolve the effective provider for a request. Explicit choice wins; when omitted
 // we preserve the historical default: Gemini if a live backend is configured, else claude -p.
 function resolveProvider(requested?: unknown): Provider {
@@ -1131,6 +1166,27 @@ ${activeCase.question}`;
   }
 });
 
+// SSE log bus: live server step-logs. The Benchmark UI subscribes once on mount, so every
+// run — single, all, spotlight, groundlens — shows live progress (each logStep arrives as a
+// {log:{ts,scope,msg}} event) instead of a silent wait that looks like a hang.
+app.get("/api/logs/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.write(`data: ${JSON.stringify({ ready: true })}\n\n`);
+
+  const write: LogSink = (chunk) => res.write(chunk);
+  logClients.add(write);
+
+  // Comment heartbeat keeps the stream from idling out; EventSource ignores comment lines.
+  const heartbeat = setInterval(() => { try { res.write(`: ping\n\n`); } catch { /* closing */ } }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    logClients.delete(write);
+  });
+});
+
 // RUN Single Benchmark route
 app.post("/api/run-single-pipeline", async (req, res) => {
   const { caseId, pipeline, model, provider } = req.body;
@@ -1149,15 +1205,17 @@ app.post("/api/run-single-pipeline", async (req, res) => {
   }
 
   const startTime = Date.now();
+  logStep("run-single", `START case=${caseId} pipeline=${pipeline} provider=${chosenProvider} model=${modelName}`, `▶ Running ${prettyPipeline(pipeline)} pipeline on "${caseId}" with ${prettyModel(modelName)}…`);
   try {
     let result: any = null;
 
     if (pipeline === "single") {
       let run = await executeSingleAgent(activeCase.question, sources, chosenProvider, modelName);
       let evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
-      
+
       // Automatic improvement feedback loop
       if (evalData.score.total < 100) {
+        logStep("run-single", `score ${evalData.score.total}/100 < 100 → improvement loop (2 more ${chosenProvider} calls)`, `Scored ${evalData.score.total}/100 — refining the answer to improve it…`);
         const feedback = JSON.stringify(evalData.logs);
         const currentPrompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
 Do not assume facts or bind unrelated references. Make sure to list exactly which citations were used.
@@ -1253,8 +1311,10 @@ Your response must be JSON matching the required schema. Ensure the answer is st
     const allRuns = listAndLoadAllRuns();
     generateMarkdownReport(allRuns);
 
+    logStep("run-single", `DONE case=${caseId} pipeline=${pipeline} score=${result.score?.total}/100 ${Date.now() - startTime}ms`, `✓ Finished "${caseId}" — final score ${result.score?.total}/100 (${Math.round((Date.now() - startTime) / 1000)}s)`);
     res.json({ success: true, result });
   } catch (err: any) {
+    logStep("run-single", `ERROR case=${caseId} pipeline=${pipeline} after ${Date.now() - startTime}ms: ${err?.message || err}`, `✗ Run failed: ${err?.message || err}`);
     console.error("Error executing benchmark", err);
     res.status(500).json({ error: err.message || "Failed to call Gemini model. Verify your API Key." });
   }
@@ -1567,23 +1627,33 @@ async function generateStructured(opts: {
   prompt: string;
   schema: any; // plain JSON Schema
 }): Promise<{ data: any; prompt_tokens: number; output_tokens: number }> {
-  if (opts.provider === "claude") {
-    const { parsed, usage } = await callClaudePSpotlight(opts.prompt, opts.schema, opts.model);
-    return { data: parsed, prompt_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
+  const t0 = Date.now();
+  const pretty = prettyModel(opts.model);
+  logStep("llm", `→ ${opts.provider}/${opts.model} request (prompt ${opts.prompt.length} chars)`, `${pretty} is thinking…`);
+  try {
+    if (opts.provider === "claude") {
+      const { parsed, usage } = await callClaudePSpotlight(opts.prompt, opts.schema, opts.model);
+      logStep("llm", `✓ claude/${opts.model} ${Date.now() - t0}ms (in ${usage.input_tokens} / out ${usage.output_tokens} tok)`, `${pretty} responded (${Math.round((Date.now() - t0) / 1000)}s)`);
+      return { data: parsed, prompt_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
+    }
+    // Gemini path. getGeminiClient() throws the existing "GEMINI_API_KEY is missing" error
+    // when no backend is configured, preserving the current key-missing UX.
+    getGeminiClient();
+    const response = await generateContentWithRetry({
+      model: opts.model,
+      contents: opts.prompt,
+      config: { responseMimeType: "application/json", responseSchema: toGeminiSchema(opts.schema) },
+    });
+    logStep("llm", `✓ gemini/${opts.model} ${Date.now() - t0}ms (in ${response.usageMetadata?.promptTokenCount || 0} / out ${response.usageMetadata?.candidatesTokenCount || 0} tok)`, `${pretty} responded (${Math.round((Date.now() - t0) / 1000)}s)`);
+    return {
+      data: JSON.parse(response.text || "{}"),
+      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+      output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+    };
+  } catch (e: any) {
+    logStep("llm", `✗ ${opts.provider}/${opts.model} FAILED after ${Date.now() - t0}ms: ${e?.message || e}`, `${pretty} call failed: ${e?.message || e}`);
+    throw e;
   }
-  // Gemini path. getGeminiClient() throws the existing "GEMINI_API_KEY is missing" error
-  // when no backend is configured, preserving the current key-missing UX.
-  getGeminiClient();
-  const response = await generateContentWithRetry({
-    model: opts.model,
-    contents: opts.prompt,
-    config: { responseMimeType: "application/json", responseSchema: toGeminiSchema(opts.schema) },
-  });
-  return {
-    data: JSON.parse(response.text || "{}"),
-    prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-    output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
-  };
 }
 
 // Run `claude -p` as a structured-JSON fallback when GEMINI_API_KEY isn't configured.
@@ -1624,11 +1694,16 @@ CRITICAL RUNTIME CONSTRAINTS:
       { stdio: ["pipe", "pipe", "pipe"] },
     );
 
+    const t0 = Date.now();
+    const chosenModel = CLAUDE_MODELS.includes(model) ? model : "sonnet";
+    logStep("claude-p", `spawn pid=${child.pid} --model ${chosenModel} (prompt ${prompt.length} chars, 240s ceiling)`);
+
     let stdout = "";
     let stderr = "";
     let killed = false;
     const timer = setTimeout(() => {
       killed = true;
+      logStep("claude-p", `⏱ TIMEOUT after 240s — SIGTERM pid=${child.pid} (stdout so far: ${stdout.length} chars)`, `${prettyModel(chosenModel)} timed out after 4 minutes — try again or switch model.`);
       child.kill("SIGTERM");
     }, 240000); // 4 minute hard ceiling
 
@@ -1636,10 +1711,12 @@ CRITICAL RUNTIME CONSTRAINTS:
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.on("error", (err) => {
       clearTimeout(timer);
+      logStep("claude-p", `✗ spawn error pid=${child.pid}: ${err.message}`);
       reject(err);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      logStep("claude-p", `closed pid=${child.pid} code=${code} after ${Date.now() - t0}ms (stdout ${stdout.length} chars)`);
       if (killed) return reject(new Error("claude -p timed out after 4 minutes"));
       if (code !== 0) {
         return reject(new Error(`claude -p exited ${code}: ${stderr.slice(0, 800) || stdout.slice(0, 400)}`));
@@ -1679,6 +1756,7 @@ CRITICAL RUNTIME CONSTRAINTS:
             `set GEMINI_API_KEY to use Gemini structured output instead, which is faster and cheaper.`
           );
         }
+        logStep("claude-p", `✓ structured_output ok pid=${child.pid} turns=${envelope?.num_turns} stop=${envelope?.stop_reason} cost=$${envelope?.total_cost_usd}`);
         resolve({
           parsed,
           usage: {
