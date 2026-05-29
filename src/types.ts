@@ -45,6 +45,7 @@ export interface RunRecord {
   answer: string;
   citations_used: string[];
   evidence_cards: EvidenceCard[];
+  missing_evidence?: string[];
   validation: ValidationDetails;
   score: ScoreDetails;
   eval_logs?: string[];
