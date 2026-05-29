@@ -297,9 +297,30 @@ const TAB_META: Record<
   },
 };
 
+type TabId = "dashboard" | "files" | "report" | "spotlight" | "groundlens";
+
+// Corpus and Report are nested under the Harness top-level tab as subtabs — they
+// share the benchmark's ground truth, so they read as one section. Spotlight and
+// Groundlens remain standalone top-level tabs.
+const HARNESS_SUBTABS: { id: TabId; label: string }[] = [
+  { id: "dashboard", label: "Benchmark" },
+  { id: "files", label: "Corpus" },
+  { id: "report", label: "Report" },
+];
+const HARNESS_GROUP: TabId[] = HARNESS_SUBTABS.map((t) => t.id);
+
+// Top-level nav. The Harness entry represents the whole Harness group (its `id` is
+// the group's default subtab, used when entering the group from outside).
+const TOP_TABS: { id: TabId; label: string }[] = [
+  { id: "dashboard", label: "Harness" },
+  { id: "spotlight", label: "Spotlight" },
+  { id: "groundlens", label: "Groundlens" },
+];
+
 export default function App() {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report" | "spotlight" | "groundlens">("dashboard");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const inHarness = HARNESS_GROUP.includes(activeTab);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
@@ -686,20 +707,24 @@ export default function App() {
             </div>
           </div>
 
-          {/* Underline tabs — IDE / Stripe style */}
+          {/* Underline tabs — IDE / Stripe style. The Harness entry stays lit for any
+              of its subtabs (Benchmark / Corpus / Report). */}
           <div className="flex items-center gap-0 -mb-px overflow-x-auto">
-            {(["dashboard", "files", "report", "spotlight", "groundlens"] as const).map((tab) => {
-              const isActive = activeTab === tab;
-              const label =
-                tab === "dashboard" ? "Harness"
-                : tab === "files" ? "Corpus"
-                : tab === "report" ? "Report"
-                : tab === "spotlight" ? "Spotlight"
-                : "Groundlens";
+            {TOP_TABS.map(({ id, label }) => {
+              const isHarness = id === "dashboard";
+              const isActive = isHarness ? inHarness : activeTab === id;
               return (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  key={id}
+                  onClick={() => {
+                    // Entering Harness from outside lands on its default subtab; clicking
+                    // it while already inside preserves the current subtab.
+                    if (isHarness) {
+                      if (!inHarness) setActiveTab("dashboard");
+                    } else {
+                      setActiveTab(id);
+                    }
+                  }}
                   className="relative px-3.5 py-2.5 text-[12px] font-medium tracking-tight transition-colors cursor-pointer whitespace-nowrap"
                   style={{ color: isActive ? "var(--ink)" : "var(--ink-mute)" }}
                 >
@@ -740,6 +765,33 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Harness subtabs — secondary nav for Benchmark / Corpus / Report. */}
+        {inHarness && (
+          <div className="mb-6 flex items-center gap-0 border-b overflow-x-auto" style={{ borderColor: "var(--rule)" }}>
+            {HARNESS_SUBTABS.map(({ id, label }) => {
+              const isActive = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className="relative px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] transition-colors cursor-pointer whitespace-nowrap"
+                  style={{ color: isActive ? "var(--ink)" : "var(--ink-mute)" }}
+                >
+                  {label}
+                  {isActive && (
+                    <motion.span
+                      layoutId="activeHarnessSubTab"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      className="absolute left-0 right-0 -bottom-px h-0.5"
+                      style={{ background: "var(--ink)" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* TAB 1: DASHBOARD HARNESS TERMINAL */}
         {activeTab === "dashboard" && (
