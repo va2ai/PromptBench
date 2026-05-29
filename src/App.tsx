@@ -61,19 +61,20 @@ const preCalculatedRuns: RunRecord[] = [
     validation: {},
     latency_ms: 1100,
     estimated_cost_usd: 0.000085,
+    missing_evidence: [],
     score: {
-      total: 55,
+      total: 45,
       required_concepts: 24,
       forbidden_claims: 0,
       citation_validity: 15,
-      uncertainty: 10,
+      uncertainty: 0,
       clarity: 6
     },
     eval_logs: [
       "Required Concepts (24/40): Found secondary service connection, aggravation, medical nexus. Missing VA exam adequacy and evidence gaps.",
       "Forbidden Claims (0/20): Triggered forbidden claims: 'guaranteed' and 'automatic approval'!",
       "Citation Validity (15/20): Found citations directly in response text but citations_used metadata array was empty.",
-      "Uncertainty / Evidence Gaps (10/10): Contained healthy disclaimers or cautionary stems.",
+      "Uncertainty / Evidence Gaps (0/10): Categorical answer — states the path as automatic and guaranteed with no evidence-gap or calibration language.",
       "Structure (6/10): Plain text structure with minimal layout styling."
     ]
   },
@@ -91,6 +92,10 @@ const preCalculatedRuns: RunRecord[] = [
         excerpt: "Disability which is proximately due to or the result of a service-connected disease or injury shall be service connected. Any increase in severity... will be service connected for the degree of aggravation.",
         why_it_matters: "Direct authority specifying requirements for secondary service connection and aggravation of pre-existing injuries."
       }
+    ],
+    missing_evidence: [
+      "No medical nexus opinion in the corpus actually links the veteran's PTSD to the sleep apnea — the secondary theory needs a supporting medical opinion.",
+      "The adequacy of the existing VA examination cannot be assessed from the provided sources."
     ],
     validation: {},
     latency_ms: 2400,
@@ -126,6 +131,7 @@ const preCalculatedRuns: RunRecord[] = [
         why_it_matters: "Establishes legal standard for secondary linkages."
       }
     ],
+    missing_evidence: [],
     validation: {
       passes: true,
       unsupported_claims: [],
@@ -161,19 +167,20 @@ const preCalculatedRuns: RunRecord[] = [
     validation: {},
     latency_ms: 1050,
     estimated_cost_usd: 0.000075,
+    missing_evidence: [],
     score: {
-      total: 36,
+      total: 31,
       required_concepts: 16,
       forbidden_claims: 0,
       citation_validity: 10,
-      uncertainty: 5,
+      uncertainty: 0,
       clarity: 5
     },
     eval_logs: [
       "Required Concepts (16/40): Found substantially gainful employment, marginal employment. Missing protected work environment, education/work history, functional limitations.",
       "Forbidden Claims (0/20): Triggered forbidden claims: 'part-time work automatically bars TDIU' and 'guaranteed'!",
       "Citation Validity (10/20): Code parsed in text.",
-      "Uncertainty / Evidence Gaps (5/10): Marginally covers uncertainties.",
+      "Uncertainty / Evidence Gaps (0/10): Categorical answer — \"automatically bars\", \"automatically marginal\", \"guaranteed\"; no evidence-gap language.",
       "Structure (5/10): Lacks formatting blocks."
     ]
   },
@@ -192,22 +199,25 @@ const preCalculatedRuns: RunRecord[] = [
         why_it_matters: "Explicitly states that marginal employment does not bar TDIU."
       }
     ],
+    missing_evidence: [
+      "The corpus does not establish the veteran's actual part-time earnings, so whether the work is marginal cannot be confirmed from the sources alone."
+    ],
     validation: {},
     latency_ms: 2200,
     estimated_cost_usd: 0.00025,
     score: {
-      total: 90,
+      total: 85,
       required_concepts: 40,
       forbidden_claims: 20,
       citation_validity: 10,
-      uncertainty: 10,
+      uncertainty: 5,
       clarity: 10
     },
     eval_logs: [
       "Required Concepts (40/40): All 5 concepts matched.",
       "Forbidden Claims (20/20): No forbidden phrases used.",
       "Citation Validity (10/20): References 38 CFR § 4.16 perfectly but citations array is empty.",
-      "Uncertainty / Evidence Gaps (10/10): Well Qualified.",
+      "Uncertainty / Evidence Gaps (5/10): One gap/limit marker (\"review areas\"); answer lists review areas but is otherwise stated categorically.",
       "Structure (10/10): Organized sections."
     ]
   },
@@ -226,6 +236,7 @@ const preCalculatedRuns: RunRecord[] = [
         why_it_matters: "Direct statutory anchor."
       }
     ],
+    missing_evidence: [],
     validation: {
       passes: true,
       unsupported_claims: [],
@@ -252,6 +263,39 @@ const preCalculatedRuns: RunRecord[] = [
     ]
   }
 ];
+
+// Per-tab header copy. The wordmark area reframes itself to whatever surface is active
+// instead of always describing the benchmark harness.
+const TAB_META: Record<
+  "dashboard" | "files" | "report" | "spotlight" | "groundlens",
+  { title: string; subtitle: string; accent: string }
+> = {
+  dashboard: {
+    title: "Agent Grounding Harness",
+    subtitle: "Benchmarking single-, two-, and three-agent architectures on legal accuracy, cost, and latency — ",
+    accent: "with receipts.",
+  },
+  files: {
+    title: "Corpus Workbench",
+    subtitle: "Edit the test cases and source authorities every benchmark run is scored against — ",
+    accent: "ground truth in, scores out.",
+  },
+  report: {
+    title: "Comparison Report",
+    subtitle: "Aggregated scores, failure patterns, and evidence gaps across every recorded run — ",
+    accent: "computed, not asserted.",
+  },
+  spotlight: {
+    title: "Spotlight Workbench",
+    subtitle: "Turn a source document into a faithful spotlight — hook, anchored claims, and overclaim guardrails — ",
+    accent: "no summary drift.",
+  },
+  groundlens: {
+    title: "Groundlens",
+    subtitle: "A/B grounding test over one document: calibrated vs permissive prompting, scored by a deterministic SGI — ",
+    accent: "geometry catches fabrication.",
+  },
+};
 
 export default function App() {
   // Navigation & Tabs
@@ -628,15 +672,15 @@ export default function App() {
               <div>
                 <div className="flex items-baseline gap-3 flex-wrap">
                   <h1 className="text-[17px] font-semibold tracking-tight" style={{ color: "var(--ink)" }}>
-                    Agent Grounding Harness
+                    {TAB_META[activeTab].title}
                   </h1>
                   <span className="text-[10px] font-mono uppercase tracking-[0.18em]" style={{ color: "var(--ink-mute)" }}>
                     v0 · internal
                   </span>
                 </div>
                 <p className="text-[12px] mt-0.5 max-w-2xl" style={{ color: "var(--ink-mute)" }}>
-                  Benchmarking single-, two-, and three-agent architectures on legal accuracy, cost, and latency —{" "}
-                  <span className="serif-accent" style={{ color: "var(--ink-soft)" }}>with receipts.</span>
+                  {TAB_META[activeTab].subtitle}
+                  <span className="serif-accent" style={{ color: "var(--ink-soft)" }}>{TAB_META[activeTab].accent}</span>
                 </p>
               </div>
             </div>
@@ -1181,6 +1225,24 @@ export default function App() {
                                   </div>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {/* Evidence gaps the drafter itemized (Pipelines two / three) */}
+                          {currentRun.missing_evidence && currentRun.missing_evidence.length > 0 && (
+                            <div className="bg-white border border-amber-200/70 rounded-2xl p-4.5 space-y-3 font-sans">
+                              <h5 className="text-[11px] font-bold text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-4 w-4 text-amber-500" />
+                                Evidence Gaps Reported
+                              </h5>
+                              <p className="text-[10px] text-slate-500 leading-relaxed">
+                                What the corpus does <em>not</em> establish — the drafter's own list of facts it could not ground.
+                              </p>
+                              <ul className="list-disc pl-4 space-y-1.5 text-[11px] text-slate-700">
+                                {currentRun.missing_evidence.map((gap, idx) => (
+                                  <li key={idx} className="leading-relaxed">{gap}</li>
+                                ))}
+                              </ul>
                             </div>
                           )}
 

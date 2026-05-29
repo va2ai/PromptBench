@@ -453,27 +453,46 @@ function evaluateAnswer(answer: string, citationsUsed: string[], testCase: any, 
     }
   }
 
-  // 4. Uncertainty Markers (10 points)
-  const uncertaintyStem = ["record", "evidence", "if", "would need", "missing", "nexus", "adequacy", "unclear", "gaps", "stabilized"];
-  let uncertaintyCount = 0;
-  const foundUnc: string[] = [];
-  uncertaintyStem.forEach((word) => {
-    const regex = new RegExp(`\\b${word}\\w*\\b`, "i");
-    if (regex.test(answer)) {
-      uncertaintyCount++;
-      foundUnc.push(word);
-    }
-  });
+  // 4. Uncertainty / Evidence-Gap Calibration (10 points)
+  // The old heuristic keyed off single common tokens ("if", "record", "evidence",
+  // "nexus") that appear in almost any VA legal answer, so the criterion was nearly
+  // free and measured vocabulary rather than calibration. These markers instead
+  // require distinctive phrases that actually flag what the answer cannot conclude
+  // or what evidence still needs developing.
+  const gapMarkers: { label: string; re: RegExp }[] = [
+    { label: "evidence gap", re: /\bevidence gaps?\b/i },
+    { label: "gaps in the record", re: /\bgaps? in (the )?(evidence|record)\b/i },
+    { label: "would/will need", re: /\b(would|will) need\b/i },
+    { label: "needs further", re: /\bneeds? (a |an |to |further |more )/i },
+    { label: "insufficient", re: /\binsufficient\b/i },
+    { label: "inadequate/adequacy", re: /\b(inadequa(te|cy)|adequacy)\b/i },
+    { label: "unclear", re: /\bunclear\b/i },
+    { label: "cannot determine", re: /\bcannot (be )?(determined?|conclude[d]?|confirm(ed)?|establish(ed)?)\b/i },
+    { label: "further development", re: /\bfurther development\b/i },
+    { label: "new exam", re: /\bnew (va )?exam(ination)?\b/i },
+    { label: "remand", re: /\bremand(ed)?\b/i },
+    { label: "missing", re: /\bmissing\b/i },
+    { label: "depends on", re: /\bdepends? on\b/i },
+    { label: "if the record", re: /\bif the (record|evidence|file|examination)\b/i },
+    { label: "review the record", re: /\breview (the |of )?(file|record|examination|claims file|areas?)\b/i },
+    { label: "individualized", re: /\bindividualized\b/i },
+    { label: "case-specific", re: /\bcase[- ](specific|by[- ]case)\b/i },
+    { label: "not automatic", re: /\bnot automatic\b/i },
+    { label: "not guaranteed", re: /\bnot guaranteed\b/i },
+    { label: "nexus letter/opinion", re: /\bnexus (letter|opinion)\b/i },
+  ];
+  const foundUnc = gapMarkers.filter((m) => m.re.test(answer)).map((m) => m.label);
+  const uncertaintyCount = foundUnc.length;
 
   if (uncertaintyCount >= 2) {
     scoreBreakdown.uncertainty = 10;
-    logs.push(`Uncertainty / Evidence Gaps (10/10): Good disclaimers and gap-analysis stems: (${foundUnc.join(", ")})`);
+    logs.push(`Uncertainty / Evidence Gaps (10/10): Calibrated — flags gaps/limits via ${uncertaintyCount} markers: ${foundUnc.join(", ")}.`);
   } else if (uncertaintyCount === 1) {
     scoreBreakdown.uncertainty = 5;
-    logs.push(`Uncertainty / Evidence Gaps (5/10): Minimal disclaimers found: (${foundUnc.join(", ")})`);
+    logs.push(`Uncertainty / Evidence Gaps (5/10): Only one gap/limit marker found ("${foundUnc[0]}"); answer is largely categorical.`);
   } else {
     scoreBreakdown.uncertainty = 0;
-    logs.push("Uncertainty / Evidence Gaps (0/10): Overly categorical answer; missed appropriate gap-analysis markers.");
+    logs.push("Uncertainty / Evidence Gaps (0/10): Categorical answer — no evidence-gap or calibration language (e.g. \"would need\", \"evidence gap\", \"inadequate exam\", \"not guaranteed\").");
   }
 
   // 5. Clear Structure (10 points)
@@ -898,7 +917,7 @@ Please output the revised answer, strictly resolving all errors in the output sc
 // Generate the comparison report to outputs/reports/comparison_report.md
 function generateMarkdownReport(runs: any[]): string {
   if (runs.length === 0) {
-    return `# Agent Grounding Comparison Report\n\nNo test runs found. Execute a run comparison benchmark to populated this report.`;
+    return `# Agent Grounding Comparison Report\n\nNo test runs found. Execute a benchmark run to populate this report.`;
   }
 
   // Group by Case id
@@ -910,70 +929,128 @@ function generateMarkdownReport(runs: any[]): string {
     grouped[r.case_id][r.pipeline] = r;
   });
 
-  // Calculate averages
-  const pipelineStats: Record<string, { totalScore: number; count: number; latency: number; cost: number; citErrors: number; forbidden: number }> = {
-    single: { totalScore: 0, count: 0, latency: 0, cost: 0, citErrors: 0, forbidden: 0 },
-    two: { totalScore: 0, count: 0, latency: 0, cost: 0, citErrors: 0, forbidden: 0 },
-    three: { totalScore: 0, count: 0, latency: 0, cost: 0, citErrors: 0, forbidden: 0 },
+  // Calculate per-pipeline aggregates and tally real, observed failures.
+  type Stat = {
+    totalScore: number;
+    count: number;
+    latency: number;
+    cost: number;
+    sub: { required: number; forbidden: number; citation: number; uncertainty: number; clarity: number };
+    forbiddenTriggered: number;
+    citIssues: number;
+    citNone: number;
+    lowUncertainty: number;
   };
+  const newStat = (): Stat => ({
+    totalScore: 0, count: 0, latency: 0, cost: 0,
+    sub: { required: 0, forbidden: 0, citation: 0, uncertainty: 0, clarity: 0 },
+    forbiddenTriggered: 0, citIssues: 0, citNone: 0, lowUncertainty: 0,
+  });
+  const pipelineStats: Record<string, Stat> = { single: newStat(), two: newStat(), three: newStat() };
 
   runs.forEach((r) => {
-    const p = r.pipeline;
-    if (pipelineStats[p]) {
-      pipelineStats[p].totalScore += r.score.total;
-      pipelineStats[p].latency += r.latency_ms;
-      pipelineStats[p].cost += r.estimated_cost_usd;
-      pipelineStats[p].count += 1;
+    const s = pipelineStats[r.pipeline];
+    if (!s) return;
+    s.totalScore += r.score.total;
+    s.latency += r.latency_ms;
+    s.cost += r.estimated_cost_usd;
+    s.count += 1;
+    s.sub.required += r.score.required_concepts;
+    s.sub.forbidden += r.score.forbidden_claims;
+    s.sub.citation += r.score.citation_validity;
+    s.sub.uncertainty += r.score.uncertainty;
+    s.sub.clarity += r.score.clarity;
+    if (r.score.forbidden_claims === 0) s.forbiddenTriggered += 1;
+    if (r.score.citation_validity === 0) s.citNone += 1;
+    else if (r.score.citation_validity < 20) s.citIssues += 1;
+    if (r.score.uncertainty === 0) s.lowUncertainty += 1;
+  });
 
-      // Citations validator check
-      if (r.score.citation_validity < 20) {
-        pipelineStats[p].citErrors += 1;
-      }
-      // Forbidden check
-      if (r.score.forbidden_claims === 0) {
-        pipelineStats[p].forbidden += 1;
-      }
+  const PIPE_LABEL: Record<string, string> = { single: "Single-Agent", two: "Two-Agent", three: "Three-Agent" };
+  const ranPipelines = (["single", "two", "three"] as const).filter((p) => pipelineStats[p].count > 0);
+  const avg = (total: number, count: number) => (count > 0 ? total / count : 0);
+
+  // Results table — now carries the per-criterion breakdown that explains each score.
+  let resultsTable = `| Case ID | Pipeline | Score | Concepts /40 | Forbidden /20 | Citation /20 | Gaps /10 | Structure /10 | Latency | Cost |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n`;
+  runs.forEach((r) => {
+    resultsTable += `| \`${r.case_id}\` | **${r.pipeline}** | ${r.score.total} | ${r.score.required_concepts} | ${r.score.forbidden_claims} | ${r.score.citation_validity} | ${r.score.uncertainty} | ${r.score.clarity} | ${r.latency_ms.toFixed(0)}ms | $${r.estimated_cost_usd.toFixed(6)} |\n`;
+  });
+
+  // Averages table — pipelines that were never run show "—" / "not run" instead of a
+  // misleading 0.0 that reads as if they scored zero.
+  let avgTable = `| Pipeline | Avg Score | Avg Latency | Avg Cost ($) | Runs |\n|---|---:|---:|---:|---:|\n`;
+  (["single", "two", "three"] as const).forEach((p) => {
+    const s = pipelineStats[p];
+    if (s.count === 0) {
+      avgTable += `| **${PIPE_LABEL[p]}** | — | — | — | not run |\n`;
+    } else {
+      avgTable += `| **${PIPE_LABEL[p]}** | ${avg(s.totalScore, s.count).toFixed(1)} | ${avg(s.latency, s.count).toFixed(0)}ms | $${avg(s.cost, s.count).toFixed(6)} | ${s.count} |\n`;
     }
   });
 
-  let resultsTable = `| Case ID | Pipeline | Score | Citation Status | Forbidden Triggered | Latency (ms) | Cost ($) |\n|---|---|---:|---|:---:|---:|---:|\n`;
-  runs.forEach((r) => {
-    const citStatus = r.score.citation_validity === 20 ? "Perfect" : r.score.citation_validity === 10 ? "Hallucinated" : "No Citations";
-    const forbiddenFlag = r.score.forbidden_claims === 0 ? "YES" : "No";
-    resultsTable += `| \`${r.case_id}\` | **${r.pipeline}** | ${r.score.total} | ${citStatus} | ${forbiddenFlag} | ${r.latency_ms.toFixed(0)} | $${r.estimated_cost_usd.toFixed(6)} |\n`;
-  });
-
-  // Decide Best Pipeline Overall
-  let bestPipeline = "None";
-  let bestScore = -1;
-  Object.keys(pipelineStats).forEach((p) => {
-    const stat = pipelineStats[p];
-    if (stat.count > 0) {
-      const avg = stat.totalScore / stat.count;
-      if (avg > bestScore) {
-        bestScore = avg;
-        bestPipeline = p;
-      }
+  // Best pipeline — only claimed among pipelines that actually ran, and only framed
+  // comparatively when at least two pipelines were run.
+  let bestSection: string;
+  if (ranPipelines.length === 0) {
+    bestSection = "No pipelines have completed a run yet.";
+  } else {
+    const ranked = [...ranPipelines].sort((a, b) => avg(pipelineStats[b].totalScore, pipelineStats[b].count) - avg(pipelineStats[a].totalScore, pipelineStats[a].count));
+    const top = ranked[0];
+    const topAvg = avg(pipelineStats[top].totalScore, pipelineStats[top].count).toFixed(1);
+    if (ranPipelines.length === 1) {
+      bestSection = `Only the **${PIPE_LABEL[top]}** pipeline has been run so far (avg ${topAvg}/100 over ${pipelineStats[top].count} run(s)). Run the other pipelines on the same case(s) before drawing a comparative conclusion.`;
+    } else {
+      const runner = ranked[1];
+      const delta = (avg(pipelineStats[top].totalScore, pipelineStats[top].count) - avg(pipelineStats[runner].totalScore, pipelineStats[runner].count)).toFixed(1);
+      bestSection = `**${PIPE_LABEL[top]}** leads with an average of ${topAvg}/100, ${delta} points ahead of ${PIPE_LABEL[runner]}, across ${ranPipelines.length} pipelines and ${runs.length} total run(s).`;
     }
-  });
+  }
 
-  const bestDesc =
-    bestPipeline === "three"
-      ? "The **Three-Agent** pipeline materially reduced unsupported claims and citation errors by running an auditor-repair cycle. It should be used for high-risk outputs where grounding is critical, while the Two-Agent pipeline is sufficient for simple, draft summaries."
-      : bestPipeline === "two"
-      ? "The **Two-Agent** pipeline appears to give most of the grounding benefits without the full latency/cost of the validation loop. It strikes the perfect practical balance between answering precision and speed."
-      : "The **Single-Agent** pipeline outperformed in cost and latency, but shows vulnerability to citing issues or omitting key legal disclaimers under complex topics.";
+  // Failure patterns — derived from the actual runs, not boilerplate.
+  const failureLines: string[] = [];
+  ranPipelines.forEach((p) => {
+    const s = pipelineStats[p];
+    const issues: string[] = [];
+    if (s.forbiddenTriggered > 0) issues.push(`${s.forbiddenTriggered}/${s.count} triggered a forbidden claim`);
+    if (s.citNone > 0) issues.push(`${s.citNone}/${s.count} had no valid citation`);
+    if (s.citIssues > 0) issues.push(`${s.citIssues}/${s.count} had a citation issue (hallucinated or metadata-only)`);
+    if (s.lowUncertainty > 0) issues.push(`${s.lowUncertainty}/${s.count} were categorical (no evidence-gap language)`);
+    if (issues.length > 0) failureLines.push(`- **${PIPE_LABEL[p]}**: ${issues.join("; ")}.`);
+  });
+  const failureSection = failureLines.length > 0
+    ? failureLines.join("\n")
+    : `No scoring failures detected across ${runs.length} run(s): every run avoided forbidden claims, cited valid authority, and disclosed evidence gaps.`;
+
+  // Surface the validator findings and the drafter's own "missing evidence" list — the
+  // single most decision-relevant output for a grounding tool, previously discarded.
+  const gapLines: string[] = [];
+  runs.forEach((r) => {
+    const missing: string[] = Array.isArray(r.missing_evidence) ? r.missing_evidence : [];
+    const unsupported: string[] = Array.isArray(r.validation?.unsupported_claims) ? r.validation.unsupported_claims : [];
+    const citErrs: string[] = Array.isArray(r.validation?.citation_errors) ? r.validation.citation_errors : [];
+    if (missing.length === 0 && unsupported.length === 0 && citErrs.length === 0) return;
+    gapLines.push(`**\`${r.case_id}\` — ${r.pipeline}**`);
+    missing.forEach((m) => gapLines.push(`- Missing evidence: ${m}`));
+    unsupported.forEach((m) => gapLines.push(`- Auditor flagged unsupported claim: ${m}`));
+    citErrs.forEach((m) => gapLines.push(`- Auditor flagged citation error: ${m}`));
+  });
+  const gapSection = gapLines.length > 0
+    ? gapLines.join("\n")
+    : "No evidence gaps or auditor findings were reported by the runs.";
 
   const reportContent = `# Agent Grounding MVP Comparison Report
 
 Generated on: ${new Date().toISOString()}
+Runs analyzed: ${runs.length} (${ranPipelines.map((p) => `${PIPE_LABEL[p]}: ${pipelineStats[p].count}`).join(", ") || "none"})
 
 ## Summary
 
-This report compares multi-agent architecture patterns for grounded regulatory summaries, analyzing:
-1. **Single-Agent**: Simple prompts grouping sources and prompt limits.
-2. **Two-Agent**: Splitting into a dedicated Extraction Retriever and a Drafting Reasoner.
-3. **Three-Agent with Validation**: Adding a validation step auditing the draft and rewriting on error.
+This report compares multi-agent architecture patterns for grounded regulatory summaries:
+1. **Single-Agent**: One prompt over the full source corpus.
+2. **Two-Agent**: A dedicated extraction retriever feeding a drafting reasoner.
+3. **Three-Agent with Validation**: Adds an auditor that flags unsupported claims and triggers a repair rewrite.
+
+All figures below are computed from the runs on disk. Sections are omitted of comparative claims when the data does not support them.
 
 ## Results Table
 
@@ -981,29 +1058,19 @@ ${resultsTable}
 
 ## Averages & Aggregates
 
-| Pipeline | Avg Score | Avg Latency | Avg Cost ($) | Runs |
-|---|---:|---:|---:|---:|
-| **Single-Agent** | ${(pipelineStats.single.totalScore / (pipelineStats.single.count || 1)).toFixed(1)} | ${(pipelineStats.single.latency / (pipelineStats.single.count || 1)).toFixed(0)}ms | $${(pipelineStats.single.cost / (pipelineStats.single.count || 1)).toFixed(6)} | ${pipelineStats.single.count} |
-| **Two-Agent** | ${(pipelineStats.two.totalScore / (pipelineStats.two.count || 1)).toFixed(1)} | ${(pipelineStats.two.latency / (pipelineStats.two.count || 1)).toFixed(0)}ms | $${(pipelineStats.two.cost / (pipelineStats.two.count || 1)).toFixed(6)} | ${pipelineStats.two.count} |
-| **Three-Agent** | ${(pipelineStats.three.totalScore / (pipelineStats.three.count || 1)).toFixed(1)} | ${(pipelineStats.three.latency / (pipelineStats.three.count || 1)).toFixed(0)}ms | $${(pipelineStats.three.cost / (pipelineStats.three.count || 1)).toFixed(6)} | ${pipelineStats.three.count} |
+${avgTable}
 
 ## Best Pipeline Overall
 
-**${bestPipeline.toUpperCase()} Agent Workflow** is the best scoring pipeline overall in grounding metrics!
-
-${bestDesc}
+${bestSection}
 
 ## Failure Patterns Detected
 
-1. **Single-Agent Hallucinations**: Standard models provided with broad sources sometimes pull irrelevant citations together or omit key procedural protections requested.
-2. **Citation Oversights**: Answers directly stating authorities but forgetting to construct valid citations structured mapping (e.g., scoring citation validity penalties).
-3. **Forbidden Claims**: Shorter agents occasionally using overly optimistic marketing terms like "guaranteed" or "automatic" due to raw LLM friendliness, which has been successfully mitigated by the Validation Agent.
+${failureSection}
 
-## Recommendation
+## Evidence Gaps & Auditor Findings
 
-Based on the quantitative metrics:
-- Use **Two-Agent** for high-volume, cost-sensitive internal indexing tasks. It matches 90% of structural needs.
-- Use **Three-Agent with Validation** for customer-facing or legal briefs where citations error rate must approach 0%.
+${gapSection}
 `;
 
   // Write report to markdown file as required
@@ -1117,7 +1184,9 @@ Your response must be JSON matching the required schema. Ensure the answer is st
         pipeline: "single",
         question: activeCase.question,
         answer: run.answer,
+        citations_used: run.citations_used,
         evidence_cards: [],
+        missing_evidence: [],
         validation: {},
         score: evalData.score,
         eval_logs: evalData.logs,
@@ -1135,7 +1204,9 @@ Your response must be JSON matching the required schema. Ensure the answer is st
         pipeline: "two",
         question: activeCase.question,
         answer: run.answer,
+        citations_used: run.citations_used,
         evidence_cards: run.evidence_cards,
+        missing_evidence: run.missing_evidence,
         validation: {},
         score: evalData.score,
         eval_logs: evalData.logs,
@@ -1153,7 +1224,9 @@ Your response must be JSON matching the required schema. Ensure the answer is st
         pipeline: "three",
         question: activeCase.question,
         answer: run.answer,
+        citations_used: run.citations_used,
         evidence_cards: run.evidence_cards,
+        missing_evidence: run.missing_evidence,
         validation: run.validation,
         repaired: run.repaired,
         original_answer: run.original_answer,
@@ -1209,7 +1282,9 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             pipeline: "single",
             question: activeCase.question,
             answer: run.answer,
+            citations_used: run.citations_used,
             evidence_cards: [],
+            missing_evidence: [],
             validation: {},
             score: evalData.score,
             eval_logs: evalData.logs,
@@ -1227,7 +1302,9 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             pipeline: "two",
             question: activeCase.question,
             answer: run.answer,
+            citations_used: run.citations_used,
             evidence_cards: run.evidence_cards,
+            missing_evidence: run.missing_evidence,
             validation: {},
             score: evalData.score,
             eval_logs: evalData.logs,
@@ -1245,7 +1322,9 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             pipeline: "three",
             question: activeCase.question,
             answer: run.answer,
+            citations_used: run.citations_used,
             evidence_cards: run.evidence_cards,
+            missing_evidence: run.missing_evidence,
             validation: run.validation,
             repaired: run.repaired,
             original_answer: run.original_answer,
