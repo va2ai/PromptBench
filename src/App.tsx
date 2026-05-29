@@ -336,7 +336,16 @@ export default function App() {
   const [runs, setRuns] = useState<RunRecord[]>(preCalculatedRuns);
   const [loading, setLoading] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState("");
-  const [benchmarkLogs, setBenchmarkLogs]= useState<string[]>([]);
+  // Unified log store. Client-generated lines are scope-less with raw === friendly (always
+  // shown). Server step-logs (via SSE) carry both a friendly status and the raw developer line;
+  // the Raw/Status toggle picks which to render. ts keeps client + server lines time-ordered.
+  type LogEntry = { ts: number; scope?: string; raw: string; friendly?: string };
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [showRawLogs, setShowRawLogs] = useState(false);
+  const pushLog = (text: string) =>
+    setLogEntries((prev) => [...prev, { ts: Date.now(), raw: text, friendly: text }].slice(-800));
+  const resetLogs = (texts: string[]) =>
+    setLogEntries(texts.map((t) => ({ ts: Date.now(), raw: t, friendly: t })));
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [markdownReport, setMarkdownReport] = useState<string>("");
 
@@ -350,6 +359,30 @@ export default function App() {
     fetchRuns();
     fetchReport();
     fetch("/api/providers").then((r) => r.json()).then(setProviderInfo).catch(() => setProviderInfo(null));
+  }, []);
+
+  // Subscribe to the server's step-log SSE bus so a slow multi-call run shows live progress
+  // in the benchmark log panel instead of looking stuck. Every pipeline funnels through the
+  // server's logStep, which broadcasts here. EventSource auto-reconnects on transient drops.
+  useEffect(() => {
+    const es = new EventSource("/api/logs/stream");
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.log) {
+          const { ts, scope, msg, friendly } = data.log;
+          const time = new Date(ts).toLocaleTimeString();
+          const entry: LogEntry = {
+            ts: Date.parse(ts),
+            scope,
+            raw: `[${time}] [${scope}] ${msg}`,
+            friendly: friendly ? `[${time}] ${friendly}` : undefined,
+          };
+          setLogEntries((prev) => [...prev, entry].slice(-800));
+        }
+      } catch { /* ignore non-JSON / heartbeat frames */ }
+    };
+    return () => es.close();
   }, []);
 
   // Persist the provider choice so it survives reloads.
@@ -406,10 +439,7 @@ export default function App() {
     setLoading(true);
     setApiKeyMissing(false);
     const logPrefix = `[Pipeline: ${pipeline.toUpperCase()}]`;
-    setBenchmarkLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${logPrefix} Launching run on case: "${caseId}" using model: "${selectedModel}"...`,
-    ]);
+    pushLog(`[${new Date().toLocaleTimeString()}] ${logPrefix} Launching run on case: "${caseId}" using model: "${selectedModel}"...`);
 
     try {
       const resp = await fetch("/api/run-single-pipeline", {
@@ -430,10 +460,7 @@ export default function App() {
           const filtered = prev.filter((r) => !(r.case_id === caseId && r.pipeline === pipeline));
           return [data.result, ...filtered];
         });
-        setBenchmarkLogs((prev) => [
-          ...prev,
-          `[${new Date().toLocaleTimeString()}] ${logPrefix} Grounding Run Successful! Scorer Result: ${data.result.score.total}/100. Latency: ${data.result.latency_ms}ms`,
-        ]);
+        pushLog(`[${new Date().toLocaleTimeString()}] ${logPrefix} Grounding Run Successful! Scorer Result: ${data.result.score.total}/100. Latency: ${data.result.latency_ms}ms`);
         // Refresh Report
         fetchReport();
       }
@@ -442,11 +469,8 @@ export default function App() {
       if (err.message.includes("GEMINI_API_KEY") || err.message.includes("key")) {
         setApiKeyMissing(true);
       }
-      setBenchmarkLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] ❌ Error during execution: ${err.message}`,
-        `[Advice] Grounding comparison is running in sandbox mode using pre-calculated benchmark parameters. Set GEMINI_API_KEY in your .env to make live LLM agent runs.`,
-      ]);
+      pushLog(`[${new Date().toLocaleTimeString()}] ❌ Error during execution: ${err.message}`);
+      pushLog(`[Advice] Grounding comparison is running in sandbox mode using pre-calculated benchmark parameters. Set GEMINI_API_KEY in your .env to make live LLM agent runs.`);
     } finally {
       setLoading(false);
     }
@@ -491,7 +515,7 @@ export default function App() {
   const runFullBenchmark = async () => {
     setLoading(true);
     setApiKeyMissing(false);
-    setBenchmarkLogs([
+    resetLogs([
       `[${new Date().toLocaleTimeString()}] 🚀 Initiating Full Comparative Evaluation Harness with model: "${selectedModel}"...`,
       `[System] Scheduling ${testCases.length} Test Cases across 3 pipeline architectures (9 runs total).`,
       `[System] Iterating sequentially to prevent HTTP timeouts and provide real-time grounding telemetry...`
@@ -505,10 +529,7 @@ export default function App() {
       for (const testCase of testCases) {
         for (const pipeline of pipelines) {
           const logPrefix = `[${testCase.id} / ${pipeline.toUpperCase()}]`;
-          setBenchmarkLogs((prev) => [
-            ...prev,
-            `[${new Date().toLocaleTimeString()}] ⏱️ ${logPrefix} Launching pipeline run...`,
-          ]);
+          pushLog(`[${new Date().toLocaleTimeString()}] ⏱️ ${logPrefix} Launching pipeline run...`);
 
           try {
             const resp = await fetch("/api/run-single-pipeline", {
@@ -529,10 +550,7 @@ export default function App() {
                 const filtered = prev.filter((r) => !(r.case_id === testCase.id && r.pipeline === pipeline));
                 return [data.result, ...filtered];
               });
-              setBenchmarkLogs((prev) => [
-                ...prev,
-                `[${new Date().toLocaleTimeString()}] ✓ ${logPrefix} Quality score: ${data.result.score.total}/100. Latency: ${data.result.latency_ms}ms. Cost: $${data.result.estimated_cost_usd.toFixed(5)}`,
-              ]);
+              pushLog(`[${new Date().toLocaleTimeString()}] ✓ ${logPrefix} Quality score: ${data.result.score.total}/100. Latency: ${data.result.latency_ms}ms. Cost: $${data.result.estimated_cost_usd.toFixed(5)}`);
               fetchReport();
             }
           } catch (err: any) {
@@ -541,25 +559,16 @@ export default function App() {
             if (err.message.includes("GEMINI_API_KEY") || err.message.includes("key")) {
               setApiKeyMissing(true);
             }
-            setBenchmarkLogs((prev) => [
-              ...prev,
-              `[${new Date().toLocaleTimeString()}] ❌ ${logPrefix} Failed: ${err.message}`,
-              `[Advice] Grounding comparison can run in fallback mode. Add a valid GEMINI_API_KEY to your .env to make live LLM agent runs.`,
-            ]);
+            pushLog(`[${new Date().toLocaleTimeString()}] ❌ ${logPrefix} Failed: ${err.message}`);
+            pushLog(`[Advice] Grounding comparison can run in fallback mode. Add a valid GEMINI_API_KEY to your .env to make live LLM agent runs.`);
           }
         }
       }
 
-      setBenchmarkLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] 🎉 Sweep complete! Success: ${successCount}, Failed: ${failedCount}.`,
-      ]);
+      pushLog(`[${new Date().toLocaleTimeString()}] 🎉 Sweep complete! Success: ${successCount}, Failed: ${failedCount}.`);
     } catch (err: any) {
       console.error(err);
-      setBenchmarkLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] ❌ Sweep interrupted: ${err.message}`,
-      ]);
+      pushLog(`[${new Date().toLocaleTimeString()}] ❌ Sweep interrupted: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -570,7 +579,7 @@ export default function App() {
       await fetch("/api/delete-all-runs", { method: "POST" });
       setRuns([]);
       setMarkdownReport("");
-      setBenchmarkLogs([`[System] Evaluation runs wiped. Press "Run All" or execute custom runs to regenerate statistics.`]);
+      resetLogs([`[System] Evaluation runs wiped. Press "Run All" or execute custom runs to regenerate statistics.`]);
     } catch (e) {
       console.error("Clean failed");
     }
@@ -1003,21 +1012,36 @@ export default function App() {
               <div className="border-t border-slate-100/80 pt-4.5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grounding Engine Logs</span>
-                  <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowRawLogs((v) => !v)}
+                      title={showRawLogs ? "Showing raw developer logs — click for friendly status" : "Showing friendly status — click for raw developer logs"}
+                      className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border transition ${showRawLogs ? "border-slate-300 text-slate-600 bg-slate-100" : "border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-300"}`}
+                    >
+                      {showRawLogs ? "Raw" : "Status"}
+                    </button>
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  </div>
                 </div>
                 <div className="bg-slate-950 text-slate-300 font-mono text-[9px] p-3 rounded-xl min-h-[140px] max-h-[220px] overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800 border border-slate-900 leading-relaxed shadow-inner">
-                  {benchmarkLogs.length === 0 ? (
-                    <div className="text-slate-500 italic block">Ready to accept commands. Execute workflows to pipe telemetry logs...</div>
-                  ) : (
-                    benchmarkLogs.map((lg, i) => (
+                  {(() => {
+                    const visible = logEntries
+                      .slice()
+                      .sort((a, b) => a.ts - b.ts)
+                      .filter((e) => (showRawLogs ? true : e.friendly !== undefined));
+                    if (visible.length === 0) {
+                      return <div className="text-slate-500 italic block">Ready to accept commands. Execute workflows to pipe telemetry logs...</div>;
+                    }
+                    return visible.map((e, i) => (
                       <div key={i} className="whitespace-pre-wrap">
-                        {lg}
+                        {showRawLogs ? e.raw : (e.friendly ?? e.raw)}
                       </div>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </div>
               </div>
 
