@@ -324,6 +324,10 @@ export default function App() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
+  const [provider, setProvider] = useState<"gemini" | "claude">(
+    () => (localStorage.getItem("pb.provider") as "gemini" | "claude") || "gemini"
+  );
+  const [providerInfo, setProviderInfo] = useState<{ gemini: { available: boolean }; claude: { available: boolean } } | null>(null);
   const [observabilitySubTab, setObservabilitySubTab] = useState<"grounded" | "trace" | "matrix" | "prompts">("grounded");
 
   // Core Data State
@@ -345,7 +349,13 @@ export default function App() {
     fetchWorkspaceData();
     fetchRuns();
     fetchReport();
+    fetch("/api/providers").then((r) => r.json()).then(setProviderInfo).catch(() => setProviderInfo(null));
   }, []);
+
+  // Persist the provider choice so it survives reloads.
+  useEffect(() => {
+    localStorage.setItem("pb.provider", provider);
+  }, [provider]);
 
   const fetchWorkspaceData = async () => {
     try {
@@ -397,7 +407,7 @@ export default function App() {
       const resp = await fetch("/api/run-single-pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseId, pipeline, model: selectedModel }),
+        body: JSON.stringify({ caseId, pipeline, model: selectedModel, provider }),
       });
 
       if (!resp.ok) {
@@ -440,7 +450,7 @@ export default function App() {
     setStreamingAnswer("");
     
     try {
-      const resp = await fetch(`/api/stream-single-pipeline?caseId=${caseId}&model=${selectedModel}`);
+      const resp = await fetch(`/api/stream-single-pipeline?caseId=${caseId}&model=${selectedModel}&provider=${provider}`);
       const reader = resp.body?.getReader();
       const decoder = new TextDecoder();
       
@@ -496,7 +506,7 @@ export default function App() {
             const resp = await fetch("/api/run-single-pipeline", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ caseId: testCase.id, pipeline, model: selectedModel }),
+              body: JSON.stringify({ caseId: testCase.id, pipeline, model: selectedModel, provider }),
             });
 
             if (!resp.ok) {
@@ -740,6 +750,30 @@ export default function App() {
                 </button>
               );
             })}
+            {/* Provider toggle — governs Gemini vs Claude across all tabs. */}
+            <div className="ml-auto flex items-center gap-1.5 pl-3 shrink-0">
+              <span className="text-[10px] font-mono uppercase tracking-[0.16em]" style={{ color: "var(--ink-mute)" }}>Model</span>
+              {(["gemini", "claude"] as const).map((p) => {
+                const disabled = p === "gemini" && providerInfo ? !providerInfo.gemini.available : false;
+                const isOn = provider === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => { if (!disabled) setProvider(p); }}
+                    disabled={disabled}
+                    title={disabled ? "No GEMINI_API_KEY or Vertex configured" : `Use ${p}`}
+                    className="px-2 py-1 text-[11px] font-medium capitalize transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      color: isOn ? "#fff" : "var(--ink-mute)",
+                      background: isOn ? "var(--ink)" : "transparent",
+                      borderRadius: 4,
+                    }}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </header>
@@ -2586,11 +2620,11 @@ Output only the corrected, final legal analysis in clean markdown.`
 
         {/* TAB 4: SPOTLIGHT WORKBENCH */}
         {activeTab === "spotlight" && (
-          <SpotlightWorkbench selectedModel={selectedModel} />
+          <SpotlightWorkbench selectedModel={selectedModel} provider={provider} />
         )}
 
         {/* TAB 5: GROUNDLENS METRICS */}
-        {activeTab === "groundlens" && <GroundlensMetrics />}
+        {activeTab === "groundlens" && <GroundlensMetrics provider={provider} />}
 
       </main>
     </div>

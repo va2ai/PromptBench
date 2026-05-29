@@ -277,7 +277,7 @@ function SummaryColumn({ row }: { row: SummaryRow }) {
   );
 }
 
-export default function GroundlensMetrics() {
+export default function GroundlensMetrics({ provider }: { provider: "gemini" | "claude" }) {
   const [report, setReport] = useState<GroundlensReport>(DEMO_REPORT);
   const [config, setConfig] = useState<GroundlensConfig | null>(null);
   const [running, setRunning] = useState(false);
@@ -311,7 +311,7 @@ export default function GroundlensMetrics() {
       const res = await fetch("/api/groundlens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config || {}),
+        body: JSON.stringify({ ...(config || {}), provider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Run failed.");
@@ -351,6 +351,7 @@ export default function GroundlensMetrics() {
           document_title: config.document_title,
           document_text: config.document_text,
           count: 5,
+          provider,
         }),
       });
       const data = await res.json();
