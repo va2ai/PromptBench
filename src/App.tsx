@@ -47,6 +47,7 @@ import remarkGfm from "remark-gfm";
 import { TestCase, SourceDocument, RunRecord, EvidenceCard, ScoreDetails } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightWorkbench from "./SpotlightWorkbench";
+import GroundlensMetrics from "./GroundlensMetrics";
 
 // Pre-Calculated Demo Runs to show state out of the box before API key is input
 const preCalculatedRuns: RunRecord[] = [
@@ -254,7 +255,7 @@ const preCalculatedRuns: RunRecord[] = [
 
 export default function App() {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report" | "spotlight">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "files" | "report" | "spotlight" | "groundlens">("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
@@ -643,13 +644,14 @@ export default function App() {
 
           {/* Underline tabs — IDE / Stripe style */}
           <div className="flex items-center gap-0 -mb-px overflow-x-auto">
-            {(["dashboard", "files", "report", "spotlight"] as const).map((tab) => {
+            {(["dashboard", "files", "report", "spotlight", "groundlens"] as const).map((tab) => {
               const isActive = activeTab === tab;
               const label =
                 tab === "dashboard" ? "Harness"
                 : tab === "files" ? "Corpus"
                 : tab === "report" ? "Report"
-                : "Spotlight";
+                : tab === "spotlight" ? "Spotlight"
+                : "Groundlens";
               return (
                 <button
                   key={tab}
@@ -2472,6 +2474,9 @@ Output only the corrected, final legal analysis in clean markdown.`
         {activeTab === "spotlight" && (
           <SpotlightWorkbench selectedModel={selectedModel} />
         )}
+
+        {/* TAB 5: GROUNDLENS METRICS */}
+        {activeTab === "groundlens" && <GroundlensMetrics />}
 
       </main>
     </div>

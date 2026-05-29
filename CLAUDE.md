@@ -42,6 +42,9 @@ The three pipelines and their evaluation live as inline functions in `server.ts`
 | `GET /api/all-data`, `POST /api/save-cases`, `POST /api/save-sources` | CRUD over `data/test_cases.json` and `data/sources.json` |
 | `GET /api/spotlight-engine` | Reports which engine `/api/spotlight` will use (Gemini if `GEMINI_API_KEY` set, else `claude -p`) |
 | `POST /api/spotlight` | Generate a Spotlight Workbench run |
+| `GET /api/groundlens-data`, `POST /api/groundlens-data` | Read / edit the Groundlens document + question set (`data/groundlens.json`) |
+| `GET /api/groundlens-engine` | Reports which engine `/api/groundlens` will use (Gemini if `GEMINI_API_KEY`, else `claude -p`) |
+| `POST /api/groundlens` | Run the Groundlens A/B grounding test |
 | `GET /api/health` | Liveness |
 
 `evaluateAnswer()` in `server.ts` is the canonical scorer — required concepts (40), forbidden claims (20), citation validity (20), uncertainty (10), structure (10). If you change the rubric, the pre-calculated demo runs in `src/App.tsx` (`preCalculatedRuns`) also need updating, otherwise the canned demo will disagree with live runs.
@@ -56,10 +59,18 @@ The three pipelines and their evaluation live as inline functions in `server.ts`
 
 The spotlight prompt explicitly states that **the Workbench performs no network access**: a URL in `sourceText` is content to analyze, not a fetch instruction. Don't add fetch behavior without updating that contract.
 
+### Groundlens A/B grounding test
+
+`POST /api/groundlens` is a **real** end-to-end test, not a canned view. Over one source document (`data/groundlens.json`) it: (1) does deterministic **TF-IDF top-K retrieval** per question, (2) runs the **same engine twice** with two prompt regimes — `calibrated` (strict grounding) vs `permissive` (fills gaps with confident specifics) — over identical evidence, then (3) scores each answer with the **SGI**.
+
+- The variable under test is the **prompt/behavior, not the model** — both runs use the same engine (Gemini or `claude -p`), so it's apples-to-apples. It reuses the same dual-engine path and the load-bearing `callClaudePSpotlight` fallback as Spotlight (one LLM call per regime answers all questions via a structured schema).
+- **`src/groundlens/sgi.ts`** is the canonical scorer: pure, deterministic, no LLM-as-judge. SGI = IDF-weighted token coverage of the answer against its retrieved evidence, aggregated with a **geometric mean** (so one fabricated claim tanks the score), normalized by `TAU` (the grounding fraction that defines SGI = 1.0). Verdicts: SGI ≥ 1.0 trusted, ≥ 0.85 review, else flagged. Fabricated specifics (invented numbers/validators/standards) carry max IDF and are never in evidence → they drag SGI down. If you change `TAU` or the thresholds, the demo report in `GroundlensMetrics.tsx` (`DEMO_REPORT`) is illustrative only and won't recompute.
+- The seed `data/groundlens.json` document answers every question in *general* terms but deliberately omits specific figures/validators/scenarios, so the permissive regime's fabrications are what the geometry catches.
+
 ### Frontend
 
-- `src/App.tsx` (~2500 lines) is the single top-level component with four tabs: **Harness** (live benchmark), **Corpus** (edit cases/sources), **Report** (comparison_report.md), **Spotlight** (renders `SpotlightWorkbench.tsx`).
-- `src/SpotlightWorkbench.tsx` is self-contained with its own palette and sub-tab system; it does not share styling tokens with `App.tsx`.
+- `src/App.tsx` (~2500 lines) is the single top-level component with five tabs: **Harness** (live benchmark), **Corpus** (edit cases/sources), **Report** (comparison_report.md), **Spotlight** (renders `SpotlightWorkbench.tsx`), **Groundlens** (renders `GroundlensMetrics.tsx`).
+- `src/SpotlightWorkbench.tsx` and `src/GroundlensMetrics.tsx` are each self-contained with their own palette; they do not share styling tokens with `App.tsx`. `GroundlensMetrics.tsx` shows a worked `DEMO_REPORT` until a live run lands (or when no key is configured), edits the corpus inline, and expands each question to show the real answers + retrieved evidence.
 - API-key-missing flow: backend throws `"GEMINI_API_KEY is missing..."`; frontend's `runFullBenchmark` / `runSingleCasePipeline` catches the 500, sets `apiKeyMissing=true`, shows the notice banner, and falls back to `preCalculatedRuns`. The console 500s look scary but the UX is by design.
 
 ### Design tokens (`src/index.css`)
