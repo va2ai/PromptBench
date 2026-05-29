@@ -40,20 +40,41 @@ const reportsDir = path.join(process.cwd(), "outputs", "reports");
 // Lazy initialize Gemini SDK client
 let geminiClient: GoogleGenAI | null = null;
 
+// Vertex AI uses Application Default Credentials (gcloud auth) instead of an API key.
+// Enabled with GOOGLE_GENAI_USE_VERTEXAI=true. Both backends speak the same
+// @google/genai surface, so every generateContent/responseSchema call site is unchanged.
+const useVertex = process.env.GOOGLE_GENAI_USE_VERTEXAI === "true";
+const vertexProject = process.env.GOOGLE_CLOUD_PROJECT || "vaclaims-194006";
+const vertexLocation = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+
+// True when a live Gemini backend is reachable (Vertex via ADC, or a raw API key).
+// Gates the Gemini-vs-`claude -p` fallback decision throughout the server.
+function isGeminiAvailable(): boolean {
+  return useVertex || !!process.env.GEMINI_API_KEY;
+}
+
 function getGeminiClient(): GoogleGenAI {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
+  if (!isGeminiAvailable()) {
     throw new Error("GEMINI_API_KEY is missing. Please configuration your key in the Secrets Panel.");
   }
   if (!geminiClient) {
-    geminiClient = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
+    if (useVertex) {
+      // ADC: `gcloud auth application-default login` on dev, or the VM's attached service account.
+      geminiClient = new GoogleGenAI({
+        vertexai: true,
+        project: vertexProject,
+        location: vertexLocation,
+      });
+    } else {
+      geminiClient = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build",
+          },
         },
-      },
-    });
+      });
+    }
   }
   return geminiClient;
 }
@@ -1409,7 +1430,13 @@ app.get("/api/report", (req, res) => {
 
 // Report which engine the spotlight endpoint will use, so the UI can show a badge.
 app.get("/api/spotlight-engine", (_req, res) => {
-  if (process.env.GEMINI_API_KEY) {
+  if (useVertex) {
+    res.json({
+      engine: "gemini",
+      model: process.env.GEMINI_MODEL || "gemini-3.1-flash",
+      source: `Vertex AI (ADC: ${vertexProject}/${vertexLocation})`,
+    });
+  } else if (process.env.GEMINI_API_KEY) {
     res.json({ engine: "gemini", model: process.env.GEMINI_MODEL || "gemini-3.1-flash", source: "GEMINI_API_KEY" });
   } else {
     res.json({ engine: "claude", model: "sonnet", source: "claude -p (OAuth)" });
@@ -1664,7 +1691,7 @@ Document type: ${docType}
 SOURCE DOCUMENT:
 ${sourceText}`;
 
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  const hasGeminiKey = isGeminiAvailable();
   const engine = hasGeminiKey ? "gemini" : "claude";
   const engineModel = hasGeminiKey ? modelName : "sonnet";
 
