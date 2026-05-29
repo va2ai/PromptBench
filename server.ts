@@ -127,7 +127,7 @@ async function executeWithThrottlingAndRetry(params: any, maxRetries = 12, initi
   
   // Set model-specific baseline targets
   const modelName = params.model || "gemini-3.1-flash";
-  let baselineGap = 6000; // Defaults to 6.0s for gemini-3.5-flash
+  let baselineGap = 6000; // Defaults to 6.0s for gemini-3.1-flash
   if (modelName.includes("lite")) {
     baselineGap = 2500; // Ultra low-latency models have high free limits, 2.5s is safe
   }

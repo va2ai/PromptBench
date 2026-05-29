@@ -323,7 +323,7 @@ export default function App() {
   const inHarness = HARNESS_GROUP.includes(activeTab);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
-  const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-3.1-flash");
   const [provider, setProvider] = useState<"gemini" | "claude">(
     () => (localStorage.getItem("pb.provider") as "gemini" | "claude") || "gemini"
   );
@@ -884,7 +884,7 @@ export default function App() {
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 font-semibold text-left"
                   >
-                    <option value="gemini-3.5-flash">gemini-3.5-flash (Standard Precision)</option>
+                    <option value="gemini-3.1-flash">gemini-3.1-flash (Standard Precision)</option>
                     <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra-Fast / High Limits)</option>
                   </select>
                 </div>
