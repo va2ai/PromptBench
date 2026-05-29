@@ -62,6 +62,20 @@ function resolveProvider(requested?: unknown): Provider {
   return isGeminiAvailable() ? "gemini" : "claude";
 }
 
+// claude -p model aliases we allow callers to pick. Anything else falls back to sonnet
+// so a stray Gemini model name can never be handed to `claude -p`.
+const CLAUDE_MODELS = ["sonnet", "opus", "haiku"];
+
+// Pick the model for a request, scoped to its provider. Guards against cross-provider
+// model names (e.g. a Gemini name selected while the provider is Claude).
+function resolveModel(provider: Provider, requested?: unknown): string {
+  const m = typeof requested === "string" ? requested.trim() : "";
+  if (provider === "claude") {
+    return CLAUDE_MODELS.includes(m) ? m : "sonnet";
+  }
+  return m || "gemini-3.1-flash";
+}
+
 function getGeminiClient(): GoogleGenAI {
   if (!isGeminiAvailable()) {
     throw new Error("GEMINI_API_KEY is missing. Please configuration your key in the Secrets Panel.");
@@ -1066,8 +1080,8 @@ ${gapSection}
 
 app.get("/api/stream-single-pipeline", async (req, res) => {
   const { caseId, pipeline, model, provider } = req.query;
-  const modelName = (model as string) || "gemini-3.1-flash";
   const chosenProvider = resolveProvider(provider);
+  const modelName = resolveModel(chosenProvider, model);
 
   if (!caseId) {
     return res.status(400).json({ error: "caseId is required." });
@@ -1120,8 +1134,8 @@ ${activeCase.question}`;
 // RUN Single Benchmark route
 app.post("/api/run-single-pipeline", async (req, res) => {
   const { caseId, pipeline, model, provider } = req.body;
-  const modelName = model || "gemini-3.1-flash";
   const chosenProvider = resolveProvider(provider);
+  const modelName = resolveModel(chosenProvider, model);
 
   if (!caseId || !pipeline) {
     return res.status(400).json({ error: "caseId and pipeline are required." });
@@ -1249,8 +1263,8 @@ Your response must be JSON matching the required schema. Ensure the answer is st
 // Run-All Pipelines route
 app.post("/api/run-all-pipelines", async (req, res) => {
   const { model, provider } = req.body;
-  const modelName = model || "gemini-3.1-flash";
   const chosenProvider = resolveProvider(provider);
+  const modelName = resolveModel(chosenProvider, model);
 
   const cases = loadTestCases();
   const sources = loadSources();
@@ -1554,7 +1568,7 @@ async function generateStructured(opts: {
   schema: any; // plain JSON Schema
 }): Promise<{ data: any; prompt_tokens: number; output_tokens: number }> {
   if (opts.provider === "claude") {
-    const { parsed, usage } = await callClaudePSpotlight(opts.prompt, opts.schema);
+    const { parsed, usage } = await callClaudePSpotlight(opts.prompt, opts.schema, opts.model);
     return { data: parsed, prompt_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
   }
   // Gemini path. getGeminiClient() throws the existing "GEMINI_API_KEY is missing" error
@@ -1575,7 +1589,7 @@ async function generateStructured(opts: {
 // Run `claude -p` as a structured-JSON fallback when GEMINI_API_KEY isn't configured.
 // --bare strips hooks/auto-memory/CLAUDE.md auto-discovery so the call doesn't drag the
 // VM-wide ~$0.50 baseline; --json-schema constrains the model output to our shape.
-async function callClaudePSpotlight(prompt: string, schema: object): Promise<{
+async function callClaudePSpotlight(prompt: string, schema: object, model: string = "sonnet"): Promise<{
   parsed: any;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number | null };
 }> {
@@ -1599,7 +1613,7 @@ CRITICAL RUNTIME CONSTRAINTS:
       "claude",
       [
         "-p",
-        "--model", "sonnet",
+        "--model", CLAUDE_MODELS.includes(model) ? model : "sonnet",
         "--output-format", "json",
         "--json-schema", JSON.stringify(schema),
         "--append-system-prompt", singleShotDirective,
@@ -1692,7 +1706,8 @@ app.post("/api/spotlight", async (req, res) => {
   }
 
   const docType = String(documentType || "other");
-  const modelName = model || "gemini-3.1-flash";
+  const chosenProvider = resolveProvider(provider);
+  const modelName = resolveModel(chosenProvider, model);
 
   const vaMode = docType === "va_decision"
     ? `\nVA DECISION MODE:\nPrioritize hooks involving Board legal error, inadequate reasons or bases, duty to assist failure, inadequate VA medical opinion, favorable finding ignored or minimized, favorable evidence discounted, missing nexus bridge, effective-date issue, TDIU issue, secondary-service-connection theory, AMA lane decision point, or contradiction between findings and conclusion. Avoid saying the appeal will win. Identify possible development issues, reasons-or-bases problems, evidentiary gaps, or next-best review questions.\n`
@@ -1727,9 +1742,8 @@ Document type: ${docType}
 SOURCE DOCUMENT:
 ${sourceText}`;
 
-  const chosenProvider = resolveProvider(provider);
   const engine = chosenProvider;
-  const engineModel = chosenProvider === "gemini" ? modelName : "sonnet";
+  const engineModel = modelName;
 
   try {
     const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
@@ -1936,7 +1950,7 @@ ${documentText}`;
 
   const chosenProvider = resolveProvider(req.body?.provider);
   const engine = chosenProvider;
-  const modelName = chosenProvider === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+  const modelName = resolveModel(chosenProvider, req.body?.model ?? process.env.GEMINI_MODEL);
 
   try {
     const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
@@ -2016,7 +2030,7 @@ app.post("/api/groundlens", async (req, res) => {
 
   const chosenProvider = resolveProvider(req.body?.provider);
   const engine = chosenProvider;
-  const modelName = chosenProvider === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.1-flash") : "sonnet";
+  const modelName = resolveModel(chosenProvider, req.body?.model ?? process.env.GEMINI_MODEL);
 
   try {
     // 1. Deterministic TF-IDF retrieval (top-K chunks per question).
