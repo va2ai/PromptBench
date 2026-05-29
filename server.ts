@@ -598,13 +598,12 @@ app.post("/api/save-sources", (req, res) => {
 });
 
 // Pipeline Engine Core
-async function executeSingleAgent(question: string, sources: any[], modelName = "gemini-3.1-flash", customPrompt?: string): Promise<{
+async function executeSingleAgent(question: string, sources: any[], provider: Provider = "gemini", modelName = "gemini-3.1-flash", customPrompt?: string): Promise<{
   answer: string;
   citations_used: string[];
   prompt_tokens: number;
   output_tokens: number;
 }> {
-  const client = getGeminiClient();
   const corpusText = sources
     .map((s, idx) => `[Source ${idx + 1}] ID: ${s.source_id}\nTitle: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`)
     .join("\n\n");
@@ -620,36 +619,30 @@ ${question}
 
 Your response must be JSON matching the required schema. Ensure the answer is structured with headings or lists where appropriate.`;
 
-  const response = await generateContentWithRetry({
+  const { data: parsed, prompt_tokens, output_tokens } = await generateStructured({
+    provider,
     model: modelName,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          answer: { type: Type.STRING },
-          citations_used: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-        },
-        required: ["answer", "citations_used"],
+    prompt,
+    schema: {
+      type: "object",
+      properties: {
+        answer: { type: "string" },
+        citations_used: { type: "array", items: { type: "string" } },
       },
+      required: ["answer", "citations_used"],
     },
   });
 
-  const parsed = JSON.parse(response.text || "{}");
   return {
     answer: parsed.answer || "",
     citations_used: parsed.citations_used || [],
-    prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-    output_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+    prompt_tokens,
+    output_tokens,
   };
 }
 
 // Two-Agent Core
-async function executeTwoAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
+async function executeTwoAgent(question: string, sources: any[], provider: Provider = "gemini", modelName = "gemini-3.1-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -657,7 +650,6 @@ async function executeTwoAgent(question: string, sources: any[], modelName = "ge
   prompt_tokens: number;
   output_tokens: number;
 }> {
-  const client = getGeminiClient();
   const corpusText = sources
     .map((s, idx) => `[ID: ${s.source_id}] Title: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`)
     .join("\n\n");
@@ -674,36 +666,33 @@ ${question}
 
 Response must be structured JSON.`;
 
-  const retrieverResponse = await generateContentWithRetry({
+  const retrieval = await generateStructured({
+    provider,
     model: modelName,
-    contents: retrievalPrompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          evidence_cards: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                source_id: { type: Type.STRING },
-                citation: { type: Type.STRING },
-                relevance: { type: Type.STRING, description: "high, medium, or low" },
-                excerpt: { type: Type.STRING },
-                why_it_matters: { type: Type.STRING },
-              },
-              required: ["source_id", "citation", "relevance", "excerpt", "why_it_matters"],
+    prompt: retrievalPrompt,
+    schema: {
+      type: "object",
+      properties: {
+        evidence_cards: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              source_id: { type: "string" },
+              citation: { type: "string" },
+              relevance: { type: "string", description: "high, medium, or low" },
+              excerpt: { type: "string" },
+              why_it_matters: { type: "string" },
             },
+            required: ["source_id", "citation", "relevance", "excerpt", "why_it_matters"],
           },
         },
-        required: ["evidence_cards"],
       },
+      required: ["evidence_cards"],
     },
   });
 
-  const retrievalParsed = JSON.parse(retrieverResponse.text || "{}");
-  const evidenceCards = retrievalParsed.evidence_cards || [];
+  const evidenceCards = retrieval.data.evidence_cards || [];
 
   // Agent 2: Reasoning & Drafting Agent
   const reasoningPrompt = `You are a high-level legal reasoning and drafting agent. 
@@ -719,57 +708,40 @@ ${JSON.stringify(evidenceCards, null, 2)}
 
 Response must be structured JSON.`;
 
-  const reasonerResponse = await generateContentWithRetry({
+  const reasoning = await generateStructured({
+    provider,
     model: modelName,
-    contents: reasoningPrompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          answer: { type: Type.STRING },
-          citations_used: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          missing_evidence: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-        },
-        required: ["answer", "citations_used", "missing_evidence"],
+    prompt: reasoningPrompt,
+    schema: {
+      type: "object",
+      properties: {
+        answer: { type: "string" },
+        citations_used: { type: "array", items: { type: "string" } },
+        missing_evidence: { type: "array", items: { type: "string" } },
       },
+      required: ["answer", "citations_used", "missing_evidence"],
     },
   });
 
-  const reasonerParsed = JSON.parse(reasonerResponse.text || "{}");
-
-  const totalPromptTokens =
-    (retrieverResponse.usageMetadata?.promptTokenCount || 0) +
-    (reasonerResponse.usageMetadata?.promptTokenCount || 0);
-  const totalOutputTokens =
-    (retrieverResponse.usageMetadata?.candidatesTokenCount || 0) +
-    (reasonerResponse.usageMetadata?.candidatesTokenCount || 0);
-
   return {
     evidence_cards: evidenceCards,
-    answer: reasonerParsed.answer || "",
-    citations_used: reasonerParsed.citations_used || [],
-    missing_evidence: reasonerParsed.missing_evidence || [],
-    prompt_tokens: totalPromptTokens,
-    output_tokens: totalOutputTokens,
+    answer: reasoning.data.answer || "",
+    citations_used: reasoning.data.citations_used || [],
+    missing_evidence: reasoning.data.missing_evidence || [],
+    prompt_tokens: retrieval.prompt_tokens + reasoning.prompt_tokens,
+    output_tokens: retrieval.output_tokens + reasoning.output_tokens,
   };
 }
 
 
 // Agent 3: Prompt Improver Agent (Meta-Agent)
 async function improvePrompt(
-  currentPrompt: string, 
-  feedback: string, 
+  currentPrompt: string,
+  feedback: string,
+  provider: Provider,
   modelName: string
 ): Promise<string> {
-  const client = getGeminiClient();
-  const improvePromptPrompt = `You are a prompt engineering expert. 
+  const improvePromptPrompt = `You are a prompt engineering expert.
   Given the current prompt, and feedback from the validation/evaluation phase, please output an improved, more robust version of the prompt that avoids these mistakes.
   
   Current Prompt:
@@ -780,27 +752,24 @@ async function improvePrompt(
   
   Please output only the new, improved prompt in a JSON object.`;
 
-  const response = await generateContentWithRetry({
+  const { data: parsed } = await generateStructured({
+    provider,
     model: modelName,
-    contents: improvePromptPrompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          prompt: { type: Type.STRING },
-        },
-        required: ["prompt"],
+    prompt: improvePromptPrompt,
+    schema: {
+      type: "object",
+      properties: {
+        prompt: { type: "string" },
       },
+      required: ["prompt"],
     },
   });
 
-  const parsed = JSON.parse(response.text || "{}");
   return parsed.prompt || currentPrompt;
 }
 
 // Three-Agent Core with Validation & Single-Turn Repair
-async function executeThreeAgent(question: string, sources: any[], modelName = "gemini-3.1-flash"): Promise<{
+async function executeThreeAgent(question: string, sources: any[], provider: Provider = "gemini", modelName = "gemini-3.1-flash"): Promise<{
   evidence_cards: any[];
   answer: string;
   citations_used: string[];
@@ -817,10 +786,8 @@ async function executeThreeAgent(question: string, sources: any[], modelName = "
   prompt_tokens: number;
   output_tokens: number;
 }> {
-  const client = getGeminiClient();
-
   // 1 & 2. Get retrieval evidence and draft answer using same sequence
-  const pipelineB = await executeTwoAgent(question, sources, modelName);
+  const pipelineB = await executeTwoAgent(question, sources, provider, modelName);
 
   let runPromptTokens = pipelineB.prompt_tokens;
   let runOutputTokens = pipelineB.output_tokens;
@@ -844,38 +811,27 @@ ${JSON.stringify(pipelineB.citations_used)}
 
 You must output a highly strict validation response matching the JSON schema. Set recommendation to "accept" if it passes perfectly, otherwise "revise".`;
 
-  const validatorResponse = await generateContentWithRetry({
+  const validatorResult = await generateStructured({
+    provider,
     model: modelName,
-    contents: validationPrompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          passes: { type: Type.BOOLEAN },
-          unsupported_claims: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          citation_errors: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          overconfidence_flags: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          recommendation: { type: Type.STRING, description: "accept or revise" },
-        },
-        required: ["passes", "unsupported_claims", "citation_errors", "overconfidence_flags", "recommendation"],
+    prompt: validationPrompt,
+    schema: {
+      type: "object",
+      properties: {
+        passes: { type: "boolean" },
+        unsupported_claims: { type: "array", items: { type: "string" } },
+        citation_errors: { type: "array", items: { type: "string" } },
+        overconfidence_flags: { type: "array", items: { type: "string" } },
+        recommendation: { type: "string", description: "accept or revise" },
       },
+      required: ["passes", "unsupported_claims", "citation_errors", "overconfidence_flags", "recommendation"],
     },
   });
 
-  runPromptTokens += validatorResponse.usageMetadata?.promptTokenCount || 0;
-  runOutputTokens += validatorResponse.usageMetadata?.candidatesTokenCount || 0;
+  runPromptTokens += validatorResult.prompt_tokens;
+  runOutputTokens += validatorResult.output_tokens;
 
-  const validation = JSON.parse(validatorResponse.text || "{}");
+  const validation = validatorResult.data;
 
   let finalAnswer = pipelineB.answer;
   let finalCitations = pipelineB.citations_used;
@@ -904,29 +860,24 @@ Flagged Grounding Errors to fix:
 
 Please output the revised answer, strictly resolving all errors in the output schema.`;
 
-    const repairResponse = await generateContentWithRetry({
+    const repairResult = await generateStructured({
+      provider,
       model: modelName,
-      contents: repairPrompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            answer: { type: Type.STRING },
-            citations_used: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-            },
-          },
-          required: ["answer", "citations_used"],
+      prompt: repairPrompt,
+      schema: {
+        type: "object",
+        properties: {
+          answer: { type: "string" },
+          citations_used: { type: "array", items: { type: "string" } },
         },
+        required: ["answer", "citations_used"],
       },
     });
 
-    runPromptTokens += repairResponse.usageMetadata?.promptTokenCount || 0;
-    runOutputTokens += repairResponse.usageMetadata?.candidatesTokenCount || 0;
+    runPromptTokens += repairResult.prompt_tokens;
+    runOutputTokens += repairResult.output_tokens;
 
-    const repairParsed = JSON.parse(repairResponse.text || "{}");
+    const repairParsed = repairResult.data;
     finalAnswer = repairParsed.answer || pipelineB.answer;
     finalCitations = repairParsed.citations_used || pipelineB.citations_used;
   }
@@ -1114,8 +1065,9 @@ ${gapSection}
 }
 
 app.get("/api/stream-single-pipeline", async (req, res) => {
-  const { caseId, pipeline, model } = req.query;
+  const { caseId, pipeline, model, provider } = req.query;
   const modelName = (model as string) || "gemini-3.1-flash";
+  const chosenProvider = resolveProvider(provider);
 
   if (!caseId) {
     return res.status(400).json({ error: "caseId is required." });
@@ -1133,9 +1085,8 @@ app.get("/api/stream-single-pipeline", async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const client = getGeminiClient();
   const corpusText = sources.map((s: any, idx: number) => `[Source ${idx + 1}] ID: ${s.source_id}\nTitle: ${s.title}\nCitation: ${s.citation}\nText: ${s.text}`).join("\n\n");
-  const prompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below. 
+  const prompt = `You are a legal-tech grounding agent. Examine the question and formulate an answer using ONLY the explicit citations and text inside the provided source corpus below.
 Do not assume facts or bind unrelated references.
 Source Corpus:
 ${corpusText}
@@ -1143,13 +1094,21 @@ Question:
 ${activeCase.question}`;
 
   try {
-    const stream = await client.models.generateContentStream({
-      model: modelName,
-      contents: prompt,
-    });
+    if (chosenProvider === "claude") {
+      // claude -p cannot token-stream structured output; degrade to a single final event.
+      res.write(`data: ${JSON.stringify({ text: "[Running via claude -p — live token streaming is Gemini-only; awaiting final answer…]\n\n" })}\n\n`);
+      const run = await executeSingleAgent(activeCase.question, sources, "claude", modelName);
+      res.write(`data: ${JSON.stringify({ text: run.answer })}\n\n`);
+    } else {
+      const client = getGeminiClient();
+      const stream = await client.models.generateContentStream({
+        model: modelName,
+        contents: prompt,
+      });
 
-    for await (const chunk of stream) {
-      res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      for await (const chunk of stream) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      }
     }
   } catch (err: any) {
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
@@ -1160,8 +1119,9 @@ ${activeCase.question}`;
 
 // RUN Single Benchmark route
 app.post("/api/run-single-pipeline", async (req, res) => {
-  const { caseId, pipeline, model } = req.body;
+  const { caseId, pipeline, model, provider } = req.body;
   const modelName = model || "gemini-3.1-flash";
+  const chosenProvider = resolveProvider(provider);
 
   if (!caseId || !pipeline) {
     return res.status(400).json({ error: "caseId and pipeline are required." });
@@ -1179,7 +1139,7 @@ app.post("/api/run-single-pipeline", async (req, res) => {
     let result: any = null;
 
     if (pipeline === "single") {
-      let run = await executeSingleAgent(activeCase.question, sources, modelName);
+      let run = await executeSingleAgent(activeCase.question, sources, chosenProvider, modelName);
       let evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       
       // Automatic improvement feedback loop
@@ -1196,8 +1156,8 @@ ${activeCase.question}
 
 Your response must be JSON matching the required schema. Ensure the answer is structured with headings or lists where appropriate.`;
         
-        const newPrompt = await improvePrompt(currentPrompt, feedback, modelName);
-        const run2 = await executeSingleAgent(activeCase.question, sources, modelName, newPrompt);
+        const newPrompt = await improvePrompt(currentPrompt, feedback, chosenProvider, modelName);
+        const run2 = await executeSingleAgent(activeCase.question, sources, chosenProvider, modelName, newPrompt);
         const evalData2 = evaluateAnswer(run2.answer, run2.citations_used, activeCase, sources);
         
         if (evalData2.score.total > evalData.score.total) {
@@ -1224,7 +1184,7 @@ Your response must be JSON matching the required schema. Ensure the answer is st
         estimated_cost_usd: cost,
       };
     } else if (pipeline === "two") {
-      const run = await executeTwoAgent(activeCase.question, sources, modelName);
+      const run = await executeTwoAgent(activeCase.question, sources, chosenProvider, modelName);
       const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1244,7 +1204,7 @@ Your response must be JSON matching the required schema. Ensure the answer is st
         estimated_cost_usd: cost,
       };
     } else if (pipeline === "three") {
-      const run = await executeThreeAgent(activeCase.question, sources, modelName);
+      const run = await executeThreeAgent(activeCase.question, sources, chosenProvider, modelName);
       const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
       const lat = Date.now() - startTime;
       const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1269,7 +1229,8 @@ Your response must be JSON matching the required schema. Ensure the answer is st
       return res.status(400).json({ error: "Invalid pipeline parameter" });
     }
 
-    // Save actual JSON runs details
+    // Record which provider produced this run, then save.
+    result.provider = chosenProvider;
     const timestamp = Date.now();
     const runFilename = `${caseId}_${pipeline}_${timestamp}.json`;
     fs.writeFileSync(path.join(runsDir, runFilename), JSON.stringify(result, null, 2));
@@ -1287,8 +1248,9 @@ Your response must be JSON matching the required schema. Ensure the answer is st
 
 // Run-All Pipelines route
 app.post("/api/run-all-pipelines", async (req, res) => {
-  const { model } = req.body;
+  const { model, provider } = req.body;
   const modelName = model || "gemini-3.1-flash";
+  const chosenProvider = resolveProvider(provider);
 
   const cases = loadTestCases();
   const sources = loadSources();
@@ -1302,7 +1264,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
       try {
         let result: any = null;
         if (pipeline === "single") {
-          const run = await executeSingleAgent(activeCase.question, sources, modelName);
+          const run = await executeSingleAgent(activeCase.question, sources, chosenProvider, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1322,7 +1284,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             estimated_cost_usd: cost,
           };
         } else if (pipeline === "two") {
-          const run = await executeTwoAgent(activeCase.question, sources, modelName);
+          const run = await executeTwoAgent(activeCase.question, sources, chosenProvider, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1342,7 +1304,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
             estimated_cost_usd: cost,
           };
         } else {
-          const run = await executeThreeAgent(activeCase.question, sources, modelName);
+          const run = await executeThreeAgent(activeCase.question, sources, chosenProvider, modelName);
           const evalData = evaluateAnswer(run.answer, run.citations_used, activeCase, sources);
           const lat = Date.now() - startTime;
           const cost = getCostAmount(run.prompt_tokens, run.output_tokens);
@@ -1365,6 +1327,7 @@ app.post("/api/run-all-pipelines", async (req, res) => {
           };
         }
 
+        result.provider = chosenProvider;
         const runFilename = `${activeCase.id}_${pipeline}_${Date.now()}.json`;
         fs.writeFileSync(path.join(runsDir, runFilename), JSON.stringify(result, null, 2));
         results.push(result);
