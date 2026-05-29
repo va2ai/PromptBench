@@ -323,7 +323,7 @@ export default function App() {
   const inHarness = HARNESS_GROUP.includes(activeTab);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("sleep_apnea_secondary_ptsd");
   const [activePipeline, setActivePipeline] = useState<"single" | "two" | "three">("three");
-  const [selectedModel, setSelectedModel] = useState<string>("gemini-3.5-flash");
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-3.1-flash");
   const [provider, setProvider] = useState<"gemini" | "claude">(
     () => (localStorage.getItem("pb.provider") as "gemini" | "claude") || "gemini"
   );
@@ -355,6 +355,14 @@ export default function App() {
   // Persist the provider choice so it survives reloads.
   useEffect(() => {
     localStorage.setItem("pb.provider", provider);
+  }, [provider]);
+
+  // Keep the selected model valid for the active provider — switch to that
+  // provider's default only when the current pick can't run on it.
+  useEffect(() => {
+    const claudeModels = ["sonnet", "opus", "haiku"];
+    const valid = provider === "claude" ? claudeModels.includes(selectedModel) : selectedModel.startsWith("gemini-");
+    if (!valid) setSelectedModel(provider === "claude" ? "sonnet" : "gemini-3.1-flash");
   }, [provider]);
 
   const fetchWorkspaceData = async () => {
@@ -884,8 +892,18 @@ export default function App() {
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-2.5 py-1.5 cursor-pointer outline-none focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 font-semibold text-left"
                   >
-                    <option value="gemini-3.5-flash">gemini-3.5-flash (Standard Precision)</option>
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra-Fast / High Limits)</option>
+                    {provider === "claude" ? (
+                      <>
+                        <option value="sonnet">sonnet (claude -p)</option>
+                        <option value="opus">opus (claude -p)</option>
+                        <option value="haiku">haiku (claude -p)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="gemini-3.1-flash">gemini-3.1-flash (Standard Precision)</option>
+                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra-Fast / High Limits)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
