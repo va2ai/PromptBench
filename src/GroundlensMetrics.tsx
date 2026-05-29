@@ -25,7 +25,9 @@ import {
 // tab edits the corpus, kicks the run, and renders the real results. The DEMO
 // report is shown until a real run lands (or when no GEMINI_API_KEY is set).
 //
-// Self-contained dark "terminal" palette — does not share App.tsx paper tokens.
+// Styled to match the rest of the site: the warm-paper editorial light theme
+// from index.css (white cards on #fafaf7 paper, ink/stone text, one deep-blue
+// accent, sans body with mono reserved for labels/numbers).
 // ---------------------------------------------------------------------------
 
 type Verdict = "trusted" | "review" | "flagged";
@@ -81,30 +83,33 @@ const STORAGE_KEY = "groundlens_runs_v1";
 const SGI_MAX = 1.7;
 const SGI_BASELINE = 1.0;
 
+// Mapped onto the site's design tokens (index.css :root). Same field names as
+// before, so the markup is unchanged — only the values shift from dark terminal
+// to warm paper.
 const C = {
-  bg: "#0b0e14",
-  panel: "#10141c",
-  panelAlt: "#141925",
-  border: "#1f2630",
-  borderSoft: "#171c25",
-  track: "#1b212b",
-  baseline: "#3a4554",
-  ink: "#e6edf3",
-  inkSoft: "#aeb9c4",
-  inkMute: "#6b7785",
-  blue: "#4493f8",
-  green: "#3fb950",
-  greenSoft: "#1f3322",
-  amber: "#d2a221",
-  amberSoft: "#352c12",
-  red: "#e5534b",
-  redSoft: "#3a1d1c",
+  bg: "#fafaf7",        // page paper — outer container
+  panel: "#ffffff",     // white cards
+  panelAlt: "#f4f4f0",  // secondary surface (pipeline boxes, inputs)
+  border: "#d6d3cc",    // rule-strong
+  borderSoft: "#e7e5e0",// rule (hairline)
+  track: "#e7e5e0",     // bar track
+  baseline: "#a8a29e",  // baseline marker
+  ink: "#0c0a09",       // primary text
+  inkSoft: "#44403c",   // body
+  inkMute: "#78716c",   // labels, captions
+  blue: "#1e40af",      // single accent — deep ink blue
+  green: "#166534",     // positive
+  greenSoft: "#f0fdf4",
+  amber: "#92400e",     // warn
+  amberSoft: "#fffbeb",
+  red: "#991b1b",       // negative
+  redSoft: "#fef2f2",
 };
 
 const VERDICT: Record<Verdict, { label: string; bar: string; chipBg: string; chipFg: string; chipBd: string; Icon: typeof ShieldCheck }> = {
-  trusted: { label: "TRUSTED", bar: C.green, chipBg: C.greenSoft, chipFg: C.green, chipBd: "#2c5a33", Icon: ShieldCheck },
-  review: { label: "REVIEW", bar: C.amber, chipBg: C.amberSoft, chipFg: C.amber, chipBd: "#5c4d1c", Icon: Eye },
-  flagged: { label: "FLAGGED", bar: C.red, chipBg: C.redSoft, chipFg: C.red, chipBd: "#5e2b29", Icon: Flag },
+  trusted: { label: "TRUSTED", bar: C.green, chipBg: C.greenSoft, chipFg: C.green, chipBd: "#bbf7d0", Icon: ShieldCheck },
+  review: { label: "REVIEW", bar: C.amber, chipBg: C.amberSoft, chipFg: C.amber, chipBd: "#fde68a", Icon: Eye },
+  flagged: { label: "FLAGGED", bar: C.red, chipBg: C.redSoft, chipFg: C.red, chipBd: "#fecaca", Icon: Flag },
 };
 
 // A worked sample shown before any real run (and when no API key is configured).
@@ -231,7 +236,7 @@ function QuestionDetail({ q }: { q: QuestionResult }) {
         <div key={r.regime}>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold" style={{ color: VERDICT[r.verdict].bar }}>{r.label}</span>
-            <span className="text-[10px]" style={{ color: C.inkMute }}>
+            <span className="text-[10px] font-mono" style={{ color: C.inkMute }}>
               grounding {r.grounding.toFixed(3)} · SGI {r.sgi.toFixed(3)}
             </span>
           </div>
@@ -240,7 +245,7 @@ function QuestionDetail({ q }: { q: QuestionResult }) {
       ))}
       {q.evidence.length > 0 && (
         <div className="pt-1">
-          <div className="text-[10px] font-bold tracking-wider mb-1" style={{ color: C.inkMute }}>RETRIEVED EVIDENCE</div>
+          <div className="text-[10px] font-mono font-bold tracking-wider mb-1" style={{ color: C.inkMute }}>RETRIEVED EVIDENCE</div>
           <div className="space-y-1.5">
             {q.evidence.map((e, i) => (
               <div key={i} className="text-[11px] leading-relaxed" style={{ color: C.inkMute }}>
@@ -349,15 +354,15 @@ export default function GroundlensMetrics() {
   const summaryRows = useMemo(() => Object.values(report.summary || {}), [report]);
 
   return (
-    <div className="rounded-lg overflow-hidden" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-      <div className="max-w-4xl mx-auto p-5 sm:p-7 space-y-4 font-mono">
+    <div className="rounded-lg overflow-hidden" style={{ background: C.bg, border: `1px solid ${C.borderSoft}` }}>
+      <div className="max-w-4xl mx-auto p-5 sm:p-7 space-y-4">
         {/* Header */}
         <div className="flex items-end justify-between flex-wrap gap-2 pb-1">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="text-2xl font-bold tracking-tight" style={{ color: C.blue }}>{report.title}</span>
+            <span className="text-2xl font-bold tracking-tight" style={{ color: C.ink }}>{report.title}</span>
             <span className="text-[12px]" style={{ color: C.inkSoft }}>{report.subtitle}</span>
           </div>
-          <span className="text-[12px]" style={{ color: C.inkMute }}>{report.date}</span>
+          <span className="text-[12px] font-mono" style={{ color: C.inkMute }}>{report.date}</span>
         </div>
 
         {/* Controls */}
@@ -367,7 +372,7 @@ export default function GroundlensMetrics() {
               onClick={runTest}
               disabled={running}
               className="flex items-center gap-2 px-4 py-2 rounded text-[12px] font-bold tracking-tight transition-opacity disabled:opacity-60"
-              style={{ background: C.blue, color: "#04101f" }}
+              style={{ background: C.blue, color: "#ffffff" }}
             >
               {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               {running ? "Running A/B test…" : "Run test"}
@@ -381,7 +386,7 @@ export default function GroundlensMetrics() {
               Configure
             </button>
           </div>
-          <div className="text-[10px]" style={{ color: C.inkMute }}>
+          <div className="text-[10px] font-mono" style={{ color: C.inkMute }}>
             engine: {engineInfo ? `${engineInfo.engine} · ${engineInfo.model}` : "…"}
           </div>
         </div>
@@ -391,7 +396,7 @@ export default function GroundlensMetrics() {
           {apiKeyMissing && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               className="flex items-start gap-2 px-3 py-2.5 rounded text-[11px] leading-relaxed"
-              style={{ background: C.amberSoft, color: C.amber, border: `1px solid #5c4d1c` }}>
+              style={{ background: C.amberSoft, color: C.amber, border: `1px solid #fde68a` }}>
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               No live engine produced structured output (set <code>GEMINI_API_KEY</code> for the fast path). Showing the worked sample below.
             </motion.div>
@@ -399,7 +404,7 @@ export default function GroundlensMetrics() {
           {error && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               className="flex items-start gap-2 px-3 py-2.5 rounded text-[11px] leading-relaxed"
-              style={{ background: C.redSoft, color: C.red, border: `1px solid #5e2b29` }}>
+              style={{ background: C.redSoft, color: C.red, border: `1px solid #fecaca` }}>
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               {error}
             </motion.div>
@@ -413,7 +418,7 @@ export default function GroundlensMetrics() {
               className="overflow-hidden">
               <div className="px-4 py-4 rounded space-y-3" style={{ background: C.panel, border: `1px solid ${C.borderSoft}` }}>
                 <div>
-                  <label className="text-[10px] font-bold tracking-wider" style={{ color: C.inkMute }}>DOCUMENT TITLE</label>
+                  <label className="text-[10px] font-mono font-bold tracking-wider" style={{ color: C.inkMute }}>DOCUMENT TITLE</label>
                   <input
                     value={config.document_title}
                     onChange={(e) => setConfig({ ...config, document_title: e.target.value })}
@@ -422,7 +427,7 @@ export default function GroundlensMetrics() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold tracking-wider" style={{ color: C.inkMute }}>SOURCE DOCUMENT</label>
+                  <label className="text-[10px] font-mono font-bold tracking-wider" style={{ color: C.inkMute }}>SOURCE DOCUMENT</label>
                   <textarea
                     value={config.document_text}
                     onChange={(e) => setConfig({ ...config, document_text: e.target.value })}
@@ -432,7 +437,7 @@ export default function GroundlensMetrics() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold tracking-wider" style={{ color: C.inkMute }}>QUESTIONS</label>
+                  <label className="text-[10px] font-mono font-bold tracking-wider" style={{ color: C.inkMute }}>QUESTIONS</label>
                   <div className="space-y-2 mt-1">
                     {config.questions.map((q, i) => (
                       <div key={i} className="flex items-center gap-2">
@@ -494,18 +499,18 @@ export default function GroundlensMetrics() {
 
         {/* Pipeline */}
         <div className="px-4 py-4 rounded" style={{ background: C.panel, border: `1px solid ${C.borderSoft}` }}>
-          <div className="text-[11px] font-bold tracking-wider mb-3" style={{ color: C.inkSoft }}>PIPELINE · A/B</div>
+          <div className="text-[11px] font-mono font-bold tracking-wider mb-3" style={{ color: C.inkSoft }}>PIPELINE · A/B</div>
           <div className="flex items-stretch gap-3 flex-wrap">
             <PipelineBox title="retriever" sub={`TF-IDF top-${report.topK ?? 3}`} />
             <div className="flex items-center"><Arrow /></div>
             <div className="flex-1 min-w-[180px] px-4 py-2.5 rounded space-y-1.5" style={{ background: C.panelAlt, border: `1px solid ${C.border}` }}>
               <div className="text-[12px]">
                 <span className="font-bold" style={{ color: C.green }}>Run A · {report.runA.label}</span>
-                <div className="text-[10px]" style={{ color: C.inkMute }}>{report.runA.promptLabel} · {report.runA.model}</div>
+                <div className="text-[10px] font-mono" style={{ color: C.inkMute }}>{report.runA.promptLabel} · {report.runA.model}</div>
               </div>
               <div className="text-[12px]">
                 <span className="font-bold" style={{ color: C.amber }}>Run B · {report.runB.label}</span>
-                <div className="text-[10px]" style={{ color: C.inkMute }}>{report.runB.promptLabel} · {report.runB.model}</div>
+                <div className="text-[10px] font-mono" style={{ color: C.inkMute }}>{report.runB.promptLabel} · {report.runB.model}</div>
               </div>
             </div>
             <div className="flex items-center"><Arrow /></div>
@@ -518,10 +523,10 @@ export default function GroundlensMetrics() {
         {/* Results */}
         <div className="px-4 py-4 rounded" style={{ background: C.panel, border: `1px solid ${C.borderSoft}` }}>
           <div className="flex items-center justify-between mb-4">
-            <div className="text-[11px] font-bold tracking-wider" style={{ color: C.inkSoft }}>
+            <div className="text-[11px] font-mono font-bold tracking-wider" style={{ color: C.inkSoft }}>
               RESULTS · {report.questions.length} questions × {report.questions[0]?.runs.length ?? 2} runs
             </div>
-            <div className="text-[10px]" style={{ color: C.inkMute }}>
+            <div className="text-[10px] font-mono" style={{ color: C.inkMute }}>
               {isLive ? `live · ${report.engine} · ${report.model}` : "sample data · run for live numbers"}
             </div>
           </div>
@@ -566,14 +571,14 @@ export default function GroundlensMetrics() {
             })}
           </div>
 
-          <div className="text-center text-[10px] mt-5" style={{ color: C.inkMute }}>
+          <div className="text-center text-[10px] font-mono mt-5" style={{ color: C.inkMute }}>
             SGI = {SGI_BASELINE.toFixed(1)} baseline{report.scorer ? ` · τ=${report.scorer.tau} · trust≥${report.scorer.trustThreshold} · review≥${report.scorer.reviewThreshold}` : ""}
           </div>
         </div>
 
         {/* Summary */}
         <div className="px-4 py-4 rounded" style={{ background: C.panel, border: `1px solid ${C.borderSoft}` }}>
-          <div className="text-[11px] font-bold tracking-wider mb-4" style={{ color: C.inkSoft }}>SUMMARY</div>
+          <div className="text-[11px] font-mono font-bold tracking-wider mb-4" style={{ color: C.inkSoft }}>SUMMARY</div>
           <div className="flex items-start gap-6 flex-wrap">
             {summaryRows.map((row, i) => (
               <div key={row.label} className={i > 0 ? "pl-6" : ""} style={{ flex: 1, borderLeft: i > 0 ? `1px solid ${C.border}` : "none" }}>
@@ -584,7 +589,7 @@ export default function GroundlensMetrics() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-3 text-[11px]" style={{ borderTop: `1px solid ${C.borderSoft}` }}>
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-3 text-[11px] font-mono" style={{ borderTop: `1px solid ${C.borderSoft}` }}>
           <span style={{ color: C.blue }}>github.com/groundlens</span>
           <span style={{ color: C.inkMute }}>deterministic · sub-second scorer · no LLM-as-judge</span>
         </div>
