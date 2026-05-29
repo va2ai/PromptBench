@@ -1,6 +1,0 @@
-{
-  "name": "Agent Grounding Comparison Harness",
-  "description": "An interactive playground and benchmark harness comparing Single-Agent, Two-Agent, and Three-Agent (with validation) workflows for retrieval-grounded query answering, scoring latency, cost, and factual grounding.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

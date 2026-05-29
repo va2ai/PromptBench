@@ -406,7 +406,7 @@ export default function App() {
       setBenchmarkLogs((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] ❌ Error during execution: ${err.message}`,
-        `[Advice] Grounding comparison is running in sandbox mode using pre-calculated benchmark parameters. Enter a GEMINI_API_KEY in Settings > Secrets to make live LLM agent runs.`,
+        `[Advice] Grounding comparison is running in sandbox mode using pre-calculated benchmark parameters. Set GEMINI_API_KEY in your .env to make live LLM agent runs.`,
       ]);
     } finally {
       setLoading(false);
@@ -505,7 +505,7 @@ export default function App() {
             setBenchmarkLogs((prev) => [
               ...prev,
               `[${new Date().toLocaleTimeString()}] ❌ ${logPrefix} Failed: ${err.message}`,
-              `[Advice] Grounding comparison can run in fallback mode. Add a valid GEMINI_API_KEY in Settings > Secrets to make live LLM agent runs.`,
+              `[Advice] Grounding comparison can run in fallback mode. Add a valid GEMINI_API_KEY to your .env to make live LLM agent runs.`,
             ]);
           }
         }
@@ -735,7 +735,7 @@ export default function App() {
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#a16207" }} />
               <div className="text-[12px] leading-relaxed">
                 <span className="font-semibold uppercase tracking-wider text-[10px] mr-1.5" style={{ color: "#92400e" }}>Notice</span>
-                No server-side <code className="font-mono text-[11px] px-1 py-px" style={{ background: "#fde68a", color: "#78350f", borderRadius: 2 }}>GEMINI_API_KEY</code> detected. Showing pre-computed runs. Set the key in <span className="font-medium">Settings &gt; Secrets</span> and reload to run live agents.
+                No server-side <code className="font-mono text-[11px] px-1 py-px" style={{ background: "#fde68a", color: "#78350f", borderRadius: 2 }}>GEMINI_API_KEY</code> detected. Showing pre-computed runs. Set the key in your <span className="font-medium">.env</span> file and reload to run live agents.
               </div>
             </motion.div>
           )}
