@@ -178,7 +178,7 @@ function Badge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 
 type EngineInfo = { engine: "gemini" | "claude"; model: string; source: string };
 
-export default function SpotlightWorkbench({ selectedModel }: { selectedModel: string }) {
+export default function SpotlightWorkbench({ selectedModel, provider }: { selectedModel: string; provider: "gemini" | "claude" }) {
   const [documentType, setDocumentType] = useState<string>("va_decision");
   const [sourceText, setSourceText] = useState<string>("");
   const [generating, setGenerating] = useState<boolean>(false);
@@ -218,7 +218,7 @@ export default function SpotlightWorkbench({ selectedModel }: { selectedModel: s
       const resp = await fetch("/api/spotlight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentType, sourceText, model: selectedModel }),
+        body: JSON.stringify({ documentType, sourceText, model: selectedModel, provider }),
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
